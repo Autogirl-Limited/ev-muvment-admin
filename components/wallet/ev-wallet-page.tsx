@@ -7,7 +7,7 @@ import { ConfigPageHeader, EmptyState, ErrorState, SearchInput, SkeletonRows } f
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { DriverLink } from "@/components/people/people-parts";
+import { CopyButton, DriverLink } from "@/components/people/people-parts";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Modal, ModalActions } from "@/components/ui/modal";
@@ -627,13 +627,59 @@ function AllocationDetail({ id, onClose, driver }: { id: string | null; onClose:
             )}
             <Detail label="Payment reference" value={allocation.payment_reference ?? "None"} />
             <Detail label="Checkout reference" value={allocation.checkout_transaction_reference ?? "None"} />
-            <Detail label="Checkout account" value={allocation.checkout_account_number ? `${allocation.checkout_account_name ?? ""} ${allocation.checkout_account_number}`.trim() : "None"} />
-            <Detail label="Checkout bank" value={allocation.checkout_bank_name ?? "None"} />
           </dl>
+          {allocation.checkout_account_number && <PaymentDetails allocation={allocation} />}
           {allocation.notes && <Alert>{allocation.notes}</Alert>}
         </div>
       )}
     </Modal>
+  );
+}
+
+/** The one-off account a driver pays a top-up into; only payable while the allocation is `PENDING_PAYMENT`. */
+function PaymentDetails({ allocation }: { allocation: WalletAllocation }) {
+  const expiresAt = allocation.checkout_expires_at ? new Date(allocation.checkout_expires_at) : null;
+  // The detail endpoint is uncached and applies expiry on read, so `EXPIRED` is reliable here.
+  const expired = allocation.status === "EXPIRED";
+  const payable = allocation.status === "PENDING_PAYMENT" && !expired;
+  const accountNumber = allocation.checkout_account_number!;
+
+  const rows: { label: string; value: string; copy?: string }[] = [
+    { label: "Bank", value: allocation.checkout_bank_name ?? "-" },
+    { label: "Account number", value: accountNumber, copy: accountNumber },
+    { label: "Account name", value: allocation.checkout_account_name?.trim() || "-", copy: allocation.checkout_account_name?.trim() || undefined },
+    { label: "Amount to pay", value: naira(allocation.amount), copy: String(allocation.amount) },
+  ];
+
+  return (
+    <section className={`rounded-lg border p-4 ${payable ? "border-brand/40 bg-brand/5" : "border-border bg-subtle/60"}`}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold">Payment details</h3>
+        {expiresAt && (
+          <span className={`text-xs ${expired ? "text-danger" : "text-muted"}`}>
+            {expired ? "Expired" : "Expires"} {formatDateTime(expiresAt.toISOString())}
+          </span>
+        )}
+      </div>
+      <p className="mt-1 text-xs text-muted">
+        {payable
+          ? "Transfer the exact amount to this one-off account before it expires."
+          : expired
+            ? "This account can no longer accept payment."
+            : "The account this top-up was paid into."}
+      </p>
+      <dl className="mt-3 grid gap-2 sm:grid-cols-2">
+        {rows.map((row) => (
+          <div key={row.label} className="flex items-center justify-between gap-2 rounded-lg bg-surface px-3 py-2">
+            <div className="min-w-0">
+              <dt className="text-xs font-medium uppercase tracking-wider text-muted">{row.label}</dt>
+              <dd className={`mt-1 break-words text-sm font-medium ${row.label === "Account number" ? "font-mono" : ""}`}>{row.value}</dd>
+            </div>
+            {row.copy && <CopyButton value={row.copy} label={`Copy ${row.label.toLowerCase()}`} />}
+          </div>
+        ))}
+      </dl>
+    </section>
   );
 }
 
