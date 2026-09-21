@@ -1,0 +1,80 @@
+import "server-only";
+
+import { cache } from "react";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+
+import { apiRequest, type ApiResult } from "@/lib/api/client";
+import type { User, UserType } from "@/lib/api/types";
+import {
+  ACCESS_COOKIE,
+  CHANGE_PASSWORD_REQUIRED_PATH,
+  LOGIN_PATH,
+  MUST_CHANGE_COOKIE,
+  type SessionEndReason,
+} from "./constants";
+
+/** Sends the user to the login page; the proxy clears the dead cookies on arrival. */
+export function endSession(reason: SessionEndReason): never {
+  redirect(`${LOGIN_PATH}?reason=${reason}`);
+}
+
+// The API answers 403 (not 401) when the Authorization header is missing or
+// malformed. Any other 403 is a genuine role mismatch and must not end the session.
+const MISSING_CREDENTIAL_MESSAGES = ["Not authenticated", "Invalid authentication credentials"];
+
+/**
+ * Authenticated API call for Server Components and Server Actions.
+ *
+ * `proxy.ts` refreshes tokens before they expire, so a 401 here means the
+ * session is genuinely over (e.g. the user was deactivated) and refreshing
+ * again would fail too. Server Components can't write cookies, so all
+ * refreshing lives in the proxy.
+ */
+export async function authedRequest<T = null>(
+  path: string,
+  init: { method?: "GET" | "POST" | "PATCH" | "DELETE"; body?: unknown } = {},
+): Promise<ApiResult<T>> {
+  const token = (await cookies()).get(ACCESS_COOKIE)?.value;
+  if (!token) endSession("expired");
+
+  const result = await apiRequest<T>(path, { ...init, token });
+  if (
+    !result.ok &&
+    (result.status === 401 ||
+      (result.status === 403 && MISSING_CREDENTIAL_MESSAGES.includes(result.message)))
+  ) {
+    endSession("ended");
+  }
+  return result;
+}
+
+export async function mustChangePassword(): Promise<boolean> {
+  return (await cookies()).get(MUST_CHANGE_COOKIE)?.value === "1";
+}
+
+/**
+ * The signed-in staff member, from `GET /users/me`. Role and 2FA flags come
+ * from here, never from the JWT (which carries no role).
+ */
+export const getCurrentUser = cache(async (): Promise<User> => {
+  const result = await authedRequest<User>("/users/me", { method: "GET" });
+  if (!result.ok) {
+    throw new Error(result.message);
+  }
+  // This dashboard is for staff. Drivers use the mobile app.
+  if (result.data.user_type === "DRIVER" || !result.data.is_active) {
+    endSession("ended");
+  }
+  return result.data;
+});
+
+/** Use in pages that require a real profile and a completed password change. */
+export async function requireUser(): Promise<User> {
+  if (await mustChangePassword()) redirect(CHANGE_PASSWORD_REQUIRED_PATH);
+  return getCurrentUser();
+}
+
+export function hasRole(user: User, allowed: readonly UserType[]): boolean {
+  return allowed.includes(user.user_type);
+}

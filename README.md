@@ -1,36 +1,26 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# EV Muvment Admin
 
-## Getting Started
+Staff dashboard (Admin, Account Officer, Relationship Officer) for the EV Muvment API. Built with Next.js 16 (App Router) and Tailwind 4.
 
-First, run the development server:
+## Getting started
 
 ```bash
+cp .env.example .env.local   # point API_BASE_URL at the API
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000). `API_BASE_URL` is the API origin only (`/api/v1` is appended) and is read on the server; the browser never calls the API directly.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## How auth works
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+The API contract is in `ev-muvment-api/docs/2026/09/21/admin-and-account-officer-auth-api.md`.
 
-## Learn More
+- **Tokens live in httpOnly cookies** (`ev_access`, `ev_refresh`, `ev_must_change`), written only by Server Actions and `proxy.ts`, so page JavaScript can't read them.
+- **`proxy.ts`** guards routes optimistically (cookies only), forces the change-password screen while the account is on a temporary password, and refreshes tokens shortly before the access token expires. Refresh tokens are single-use, so refreshes are single-flight and the result is reused for 60s by requests still holding the old cookie.
+- **`lib/auth/dal.ts`** is the data-access layer: `getCurrentUser()` (role and 2FA flags come from `GET /users/me`, never the JWT), `requireUser()`, `hasRole()`. Authorization is checked next to the data, not in layouts.
+- **`lib/auth/actions.ts`** holds every auth Server Action (sign-in, 2FA challenge, forgot/reset/change password, profile, 2FA management).
+- A dead session is sent to `/login?reason=expired|ended`; the proxy clears leftover cookies on arrival.
+- Drivers can authenticate against the API but are refused here; this app is staff-only.
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Adding a page that only some roles may use: add `roles` to its entry in `lib/navigation.ts`, and in the page check `hasRole(user, [...])` and render `<AccessDenied />` (also do this for API `403`s).
