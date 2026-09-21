@@ -42,6 +42,21 @@ const ICONS: Record<NavIcon, ReactNode> = {
       <path d="m9 12 2 2 4-4" />
     </>
   ),
+  applications: (
+    <>
+      <path d="M9 3h6l1 2h3a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h3l1-2Z" />
+      <path d="M9 13l2 2 4-5" />
+      <path d="M8 8h8" />
+    </>
+  ),
+  transactions: (
+    <>
+      <path d="M4 7h16" />
+      <path d="M6 7V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2" />
+      <rect x="4" y="7" width="16" height="14" rx="2" />
+      <path d="M8 13h8M8 17h5" />
+    </>
+  ),
 };
 
 function Icon({ name, className = "size-5" }: { name: NavIcon; className?: string }) {

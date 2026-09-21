@@ -1,6 +1,6 @@
 import type { UserType } from "@/lib/api/types";
 
-export type NavIcon = "dashboard" | "profile" | "security";
+export type NavIcon = "dashboard" | "profile" | "security" | "applications" | "transactions";
 
 export interface NavItem {
   label: string;
@@ -22,7 +22,13 @@ export interface NavSection {
  * Payments) will carry `roles: ["ADMIN"]` when those pages are built.
  */
 export const NAVIGATION: NavSection[] = [
-  { items: [{ label: "Dashboard", href: "/dashboard", icon: "dashboard" }] },
+  {
+    items: [
+      { label: "Dashboard", href: "/dashboard", icon: "dashboard" },
+      { label: "Driver applications", href: "/admin/driver-applications", icon: "applications", roles: ["ADMIN"] },
+      { label: "DVA transactions", href: "/dva-transactions", icon: "transactions", roles: ["ADMIN", "ACCOUNT_OFFICER", "RELATIONSHIP_OFFICER"] },
+    ],
+  },
   {
     title: "Account",
     items: [

@@ -13,4 +13,21 @@
 export const queryKeys = {
   /** The signed-in staff member (`GET /users/me`). */
   me: ["me"] as const,
+  driverApplications: {
+    all: ["driver-applications"] as const,
+    list: (filters: unknown) => ["driver-applications", "list", filters] as const,
+    detail: (id: string) => ["driver-applications", "detail", id] as const,
+    counts: (searchTerm: string) => ["driver-applications", "counts", searchTerm] as const,
+  },
+  dvaTransactions: {
+    all: ["dva-transactions"] as const,
+    list: (filters: unknown) => ["dva-transactions", "list", filters] as const,
+    detail: (id: string) => ["dva-transactions", "detail", id] as const,
+    stats: (filters: unknown) => ["dva-transactions", "stats", filters] as const,
+  },
+  users: {
+    all: ["users"] as const,
+    drivers: (searchTerm: string) => ["users", "drivers", searchTerm] as const,
+    detail: (id: string) => ["users", "detail", id] as const,
+  },
 };
