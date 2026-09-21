@@ -56,6 +56,7 @@ export interface DvaTransaction {
   payer_name: string | null;
   payer_account_number: string | null;
   payer_bank_code: string | null;
+  payer_bank_name: string | null;
   narration: string | null;
   paid_at: string;
 }

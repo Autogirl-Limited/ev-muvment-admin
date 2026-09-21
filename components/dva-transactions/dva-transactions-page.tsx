@@ -93,6 +93,10 @@ function dash(value: string | number | null | undefined) {
   return value === null || value === undefined || value === "" ? "-" : value;
 }
 
+function payerBank(tx: DvaTransaction) {
+  return tx.payer_bank_name ?? tx.payer_bank_code ?? null;
+}
+
 function shortId(id: string) {
   return `Driver ...${id.slice(-4)}`;
 }
@@ -414,7 +418,7 @@ function TransactionCard({
         <div className="rounded-lg bg-subtle/70 p-3">
           <p className="text-xs text-muted">Payer</p>
           <p className="mt-1 truncate font-medium">{dash(tx.payer_name)}</p>
-          <p className="truncate text-xs text-muted">{dash(tx.payer_account_number)} · {dash(tx.payer_bank_code)}</p>
+          <p className="truncate text-xs text-muted">{dash(tx.payer_account_number)} · {dash(payerBank(tx))}</p>
         </div>
         <div className="rounded-lg bg-subtle/70 p-3">
           <p className="text-xs text-muted">Reference</p>
@@ -602,7 +606,7 @@ export function DvaTransactionsPage() {
       keepGoing = result.pagination.has_next;
       exportPage += 1;
     }
-    const header = ["id", "paid_at", "user_id", "amount", "settlement_amount", "payer_name", "payer_account_number", "payer_bank_code", "transaction_reference", "payment_reference", "narration"];
+    const header = ["id", "paid_at", "user_id", "amount", "settlement_amount", "payer_name", "payer_account_number", "payer_bank_name", "payer_bank_code", "transaction_reference", "payment_reference", "narration"];
     const csv = [
       header.join(","),
       ...rows.map((tx) =>
@@ -658,7 +662,7 @@ export function DvaTransactionsPage() {
           <div className="grid gap-3 lg:grid-cols-[minmax(18rem,1fr)_auto_auto_auto] lg:items-end">
             <label className="space-y-1.5 text-sm">
               <span className="font-medium">Search</span>
-              <input value={search} onChange={(event) => { setSearch(event.target.value.slice(0, 200)); setPage(1); }} placeholder="Payer name, reference or narration" className="h-10 w-full rounded-lg border border-input bg-surface px-3 outline-none focus:border-brand focus:ring-3 focus:ring-brand/20" />
+              <input value={search} onChange={(event) => { setSearch(event.target.value.slice(0, 200)); setPage(1); }} placeholder="Payer, bank, reference or narration" className="h-10 w-full rounded-lg border border-input bg-surface px-3 outline-none focus:border-brand focus:ring-3 focus:ring-brand/20" />
             </label>
             {isAdmin && <Button variant="secondary" onClick={() => setDriverFinderOpen(true)}>Find driver</Button>}
             <Button variant="secondary" onClick={() => transactions.refetch()} loading={transactions.isRefetching}>Refresh</Button>
@@ -723,7 +727,7 @@ export function DvaTransactionsPage() {
                     <td className="px-4 py-3 font-semibold tabular-nums">{naira(tx.amount)}</td>
                     <td className="px-4 py-3">
                       <p>{dash(tx.payer_name)}</p>
-                      <p className="text-xs text-muted">{dash(tx.payer_account_number)} · {dash(tx.payer_bank_code)}</p>
+                      <p className="text-xs text-muted" title={tx.payer_bank_code ?? undefined}>{dash(tx.payer_account_number)} · {dash(payerBank(tx))}</p>
                     </td>
                     <td className="px-4 py-3">{driverNames.get(tx.user_id) ?? shortId(tx.user_id)}</td>
                     <td className="max-w-56 truncate px-4 py-3 font-mono text-xs">{tx.transaction_reference}</td>
@@ -765,6 +769,7 @@ export function DvaTransactionsPage() {
                 ["Fee", fee == null ? "-" : naira(fee)],
                 ["Payer", dash(selected.payer_name)],
                 ["Payer account", dash(selected.payer_account_number)],
+                ["Payer bank", dash(payerBank(selected))],
                 ["Bank code", dash(selected.payer_bank_code)],
                 ["Virtual account", dash(selected.virtual_account_id)],
                 ["Payment ref", dash(selected.payment_reference)],
