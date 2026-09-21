@@ -4,6 +4,7 @@ import { AuthSync } from "@/components/auth/auth-sync";
 import { AppShell } from "@/components/dashboard/app-shell";
 import { QueryProvider } from "@/components/providers/query-provider";
 import { RealtimeProvider } from "@/components/providers/realtime-provider";
+import { ToastProvider } from "@/components/ui/toast";
 import { requireUser } from "@/lib/auth/dal";
 import { navigationFor } from "@/lib/navigation";
 import { getQueryClient } from "@/lib/query/query-client";
@@ -23,9 +24,11 @@ export default async function DashboardLayout({ children }: LayoutProps<"/">) {
     <QueryProvider>
       <HydrationBoundary state={dehydrate(queryClient)}>
         <AuthSync />
-        <RealtimeProvider>
-          <AppShell sections={navigationFor(user.user_type)}>{children}</AppShell>
-        </RealtimeProvider>
+        <ToastProvider>
+          <RealtimeProvider>
+            <AppShell sections={navigationFor(user.user_type)}>{children}</AppShell>
+          </RealtimeProvider>
+        </ToastProvider>
       </HydrationBoundary>
     </QueryProvider>
   );
