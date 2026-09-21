@@ -6,6 +6,7 @@ export type NavIcon =
   | "security"
   | "applications"
   | "transactions"
+  | "wallet"
   | "checklists"
   | "fleet"
   | "configurations";
@@ -36,6 +37,12 @@ export const NAVIGATION: NavSection[] = [
         label: "Transactions",
         href: "/dva-transactions",
         icon: "transactions",
+        roles: ["ADMIN", "ACCOUNT_OFFICER", "RELATIONSHIP_OFFICER"],
+      },
+      {
+        label: "EV Wallet",
+        href: "/wallet",
+        icon: "wallet",
         roles: ["ADMIN", "ACCOUNT_OFFICER", "RELATIONSHIP_OFFICER"],
       },
       {

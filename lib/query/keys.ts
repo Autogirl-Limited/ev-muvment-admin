@@ -25,6 +25,13 @@ export const queryKeys = {
     detail: (id: string) => ["dva-transactions", "detail", id] as const,
     stats: (filters: unknown) => ["dva-transactions", "stats", filters] as const,
   },
+  walletAllocations: {
+    all: ["wallet-allocations"] as const,
+    list: (filters: unknown) => ["wallet-allocations", "list", filters] as const,
+    detail: (id: string) => ["wallet-allocations", "detail", id] as const,
+    stats: (filters: unknown) => ["wallet-allocations", "stats", filters] as const,
+    queue: ["wallet-allocations", "queue"] as const,
+  },
   dailyChecklists: {
     all: ["daily-checklists"] as const,
     list: (filters: unknown) => ["daily-checklists", "list", filters] as const,

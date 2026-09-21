@@ -72,6 +72,14 @@ const ICONS: Record<NavIcon, ReactNode> = {
       <path d="M8 13h8M8 17h5" />
     </>
   ),
+  wallet: (
+    <>
+      <path d="M4 7.5h14a2 2 0 0 1 2 2V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7.5a2 2 0 0 1 2-2h11" />
+      <path d="M16 11h5v5h-5a2.5 2.5 0 0 1 0-5Z" />
+      <path d="M7 5.5 14 3" />
+      <circle cx="16.5" cy="13.5" r=".7" />
+    </>
+  ),
   checklists: (
     <>
       <rect x="6" y="4" width="12" height="17" rx="2" />

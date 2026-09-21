@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import type { ChecklistResponse } from "@/lib/api/daily-checklists";
 import type { DvaTransaction } from "@/lib/api/staff";
+import type { WalletAllocation } from "@/lib/api/wallet";
 import { queryKeys } from "@/lib/query/keys";
 import { useToast } from "@/components/ui/toast";
 
@@ -77,9 +78,18 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
           queryClient.invalidateQueries({ queryKey: queryKeys.me });
           break;
         case "wallet_allocation.created":
-        case "wallet_allocation.updated":
-          toast.info("Wallet allocation updated.");
+        case "wallet_allocation.updated": {
+          const allocation = data as WalletAllocation;
+          if (allocation?.id) queryClient.setQueryData(queryKeys.walletAllocations.detail(allocation.id), allocation);
+          queryClient.invalidateQueries({ queryKey: queryKeys.walletAllocations.all });
+          queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
+          toast.info(
+            allocation?.status === "AWAITING_ALLOCATION"
+              ? `${naira(allocation.amount)} is ready to allocate on LotGrid.`
+              : "Wallet allocation updated.",
+          );
           break;
+        }
         case "notification.created":
           break;
         default:
@@ -96,6 +106,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
           retryMs = 1000;
           queryClient.invalidateQueries({ queryKey: queryKeys.dvaTransactions.all });
           queryClient.invalidateQueries({ queryKey: queryKeys.dailyChecklists.all });
+          queryClient.invalidateQueries({ queryKey: queryKeys.walletAllocations.all });
         };
         socket.onmessage = (message) => {
           try {
