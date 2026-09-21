@@ -17,12 +17,13 @@ import { ApiError } from "@/lib/api/browser";
 import { type DriverOption, listDriverOptions } from "@/lib/api/configuration";
 import type { Paginated } from "@/lib/api/staff";
 import {
-  confirmWalletAllocation,
   getTopupPreview,
   getWalletAllocation,
   getWalletStats,
+  isAmbiguousLotGridsTimeout,
   listWalletAllocations,
   recordFreeGrant,
+  retryWalletAllocation,
   type AllocationStatus,
   type AllocationType,
   type WalletAllocation,
@@ -101,7 +102,7 @@ export function EVWalletPage() {
   const queryClient = useQueryClient();
   const [freeGrantOpen, setFreeGrantOpen] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
-  const [confirmTarget, setConfirmTarget] = useState<WalletAllocation | null>(null);
+  const [retryTarget, setRetryTarget] = useState<WalletAllocation | null>(null);
 
   const allDates = url.get("range") === "all";
   const dateFrom = allDates ? "" : url.get("dateFrom") || lagosDate();
@@ -170,7 +171,7 @@ export function EVWalletPage() {
         title="EV Wallet"
         icon="bolt"
         showBackLink={false}
-        description="Track wallet credits, pending paid top-ups and LotGrid allocation work."
+        description="Track wallet credits, free grants and paid top-ups. Credit is sent to LotGrids automatically; only failed allocations need attention."
         actions={
           <>
             <DateRangePicker compact align="end" from={dateFrom} to={dateTo} onApply={applyRange} className="min-w-full sm:min-w-0 sm:w-72" />
@@ -192,7 +193,7 @@ export function EVWalletPage() {
 
       {!isAdmin && (
         <Alert>
-          Your role can view EV Wallet performance stats. Admin-only allocation queues, ledger details, free grants and confirmations are hidden.
+          Your role can view EV Wallet performance stats. Admin-only failed allocations, ledger details, free grants and retries are hidden.
         </Alert>
       )}
 
@@ -204,8 +205,8 @@ export function EVWalletPage() {
             loading={queueQuery.isLoading}
             error={queueQuery.error}
             driverMap={driverMap}
-            onRetry={() => queueQuery.refetch()}
-            onConfirm={setConfirmTarget}
+            onReload={() => queueQuery.refetch()}
+            onRetry={setRetryTarget}
           />
           <Ledger
             data={ledgerQuery.data}
@@ -225,7 +226,7 @@ export function EVWalletPage() {
 
       {isAdmin && <FreeGrantDialog open={freeGrantOpen} onClose={() => setFreeGrantOpen(false)} onChanged={refreshWallet} />}
       {isAdmin && <AllocationDetail id={detailId} onClose={() => setDetailId(null)} driver={detailId ? driverMap.get(ledgerQuery.data?.items.find((item) => item.id === detailId)?.user_id ?? "") : undefined} />}
-      {isAdmin && <ConfirmAllocationDialog allocation={confirmTarget} onClose={() => setConfirmTarget(null)} onChanged={refreshWallet} />}
+      {isAdmin && <RetryAllocationDialog allocation={retryTarget} onClose={() => setRetryTarget(null)} onChanged={refreshWallet} />}
     </div>
   );
 }
@@ -236,24 +237,24 @@ function AllocationQueue({
   loading,
   error,
   driverMap,
+  onReload,
   onRetry,
-  onConfirm,
 }: {
   allocations: WalletAllocation[];
   total: number;
   loading: boolean;
   error: unknown;
   driverMap: Map<string, DriverOption>;
-  onRetry: () => void;
-  onConfirm: (allocation: WalletAllocation) => void;
+  onReload: () => void;
+  onRetry: (allocation: WalletAllocation) => void;
 }) {
   return (
     <section className="rounded-lg border border-border bg-surface">
       <div className="border-b border-border p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="font-semibold">Allocation queue</h2>
-            <p className="mt-1 text-sm text-muted">Oldest paid top-ups appear first.</p>
+            <h2 className="font-semibold">Failed allocations</h2>
+            <p className="mt-1 text-sm text-muted">Paid top-ups that LotGrids didn&apos;t accept. Fix the cause (usually the fleet wallet balance), then retry. Oldest first.</p>
           </div>
           <Badge tone="brand">{naira(total)}</Badge>
         </div>
@@ -261,9 +262,9 @@ function AllocationQueue({
       {loading ? (
         <SkeletonRows rows={4} columns={2} />
       ) : error ? (
-        <ErrorState message={errorMessage(error, "Queue unavailable.")} onRetry={onRetry} />
+        <ErrorState message={errorMessage(error, "Failed allocations unavailable.")} onRetry={onReload} />
       ) : allocations.length === 0 ? (
-        <EmptyState icon="check" title="Queue is clear">No wallet allocations are waiting for LotGrid confirmation.</EmptyState>
+        <EmptyState icon="check" title="Nothing needs attention">Paid top-ups are allocated to LotGrids automatically. Any that fail will appear here.</EmptyState>
       ) : (
         <div className="divide-y divide-border">
           {allocations.map((allocation) => {
@@ -279,7 +280,7 @@ function AllocationQueue({
                 </div>
                 <div className="mt-3 flex items-center justify-between gap-3">
                   <span className="text-sm text-muted tabular-nums">{allocation.kwh_equivalent.toLocaleString()} kWh</span>
-                  <Button onClick={() => onConfirm(allocation)} className="h-9 px-3">Confirm</Button>
+                  <Button onClick={() => onRetry(allocation)} className="h-9 px-3">Retry allocation</Button>
                 </div>
               </div>
             );
@@ -438,6 +439,8 @@ export function FreeGrantDialog({ open, onClose, onChanged, presetDriver }: { op
   const [notes, setNotes] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A timed-out grant may have moved money already, so block another attempt until the admin has checked.
+  const [ambiguous, setAmbiguous] = useState(false);
   const debounced = useDebounced(search.trim());
   const numericAmount = Math.floor(Number(amount));
 
@@ -456,7 +459,7 @@ export function FreeGrantDialog({ open, onClose, onChanged, presetDriver }: { op
   const grantMutation = useMutation({
     mutationFn: () => recordFreeGrant({ user_id: driver!.id, amount: numericAmount, notes: notes.trim() || undefined }),
     onSuccess: () => {
-      toast.success("Free grant recorded.");
+      toast.success("Free grant allocated and wallet credited.");
       queryClient.invalidateQueries({ queryKey: queryKeys.walletAllocations.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
       onChanged();
@@ -466,17 +469,42 @@ export function FreeGrantDialog({ open, onClose, onChanged, presetDriver }: { op
       setAmount("");
       setNotes("");
       setError(null);
+      setAmbiguous(false);
     },
-    onError: (err) => setError(errorMessage(err, "Could not record this grant.")),
+    onError: (err) => {
+      const message = errorMessage(err, "Could not allocate this grant.");
+      if (err instanceof ApiError && err.status === 502 && isAmbiguousLotGridsTimeout(message)) {
+        setAmbiguous(true);
+        setError(`${message}. Do not retry yet: the money may already have moved. Check the driver's balance and the ledger first.`);
+        // The transfer may have gone through; pull fresh balances and ledger.
+        onChanged();
+      } else {
+        setError(message);
+      }
+      setConfirmOpen(false);
+    },
   });
 
-  const invalid = !driver || !driver.vehicle || !Number.isFinite(numericAmount) || numericAmount <= 0 || notes.length > 500;
+  const invalid = ambiguous || !driver || !driver.vehicle || !Number.isFinite(numericAmount) || numericAmount <= 0 || notes.length > 500;
 
   return (
     <>
-      <Modal open={open && !confirmOpen} onClose={grantMutation.isPending ? () => {} : onClose} title="Record free grant" size="lg">
+      <Modal
+        open={open && !confirmOpen}
+        onClose={
+          grantMutation.isPending
+            ? () => {}
+            : () => {
+                setAmbiguous(false);
+                setError(null);
+                onClose();
+              }
+        }
+        title="Free grant"
+        size="lg"
+      >
         <div className="space-y-4">
-          <Alert>Free grants credit a driver wallet immediately and cannot be reversed from this screen.</Alert>
+          <Alert>Free grants move money from the LotGrids fleet wallet to the driver&apos;s LotGrids wallet and credit it here immediately. They cannot be reversed from this screen.</Alert>
           {presetDriver ? (
             <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-subtle/50 px-4 py-3">
               <span>
@@ -528,15 +556,15 @@ export function FreeGrantDialog({ open, onClose, onChanged, presetDriver }: { op
           {error && <Alert tone="error">{error}</Alert>}
         </div>
         <ModalActions>
-          <Button variant="secondary" onClick={onClose} disabled={grantMutation.isPending}>Cancel</Button>
-          <Button onClick={() => setConfirmOpen(true)} disabled={invalid}>Review grant</Button>
+          <Button variant="secondary" onClick={() => { setAmbiguous(false); setError(null); onClose(); }} disabled={grantMutation.isPending}>Cancel</Button>
+          <Button onClick={() => { setError(null); setConfirmOpen(true); }} disabled={invalid}>Review grant</Button>
         </ModalActions>
       </Modal>
       <ConfirmDialog
         open={confirmOpen}
         onClose={() => setConfirmOpen(false)}
         title="Confirm free grant"
-        confirmLabel="Record grant"
+        confirmLabel="Allocate grant"
         tone="primary"
         loading={grantMutation.isPending}
         error={error}
@@ -546,7 +574,7 @@ export function FreeGrantDialog({ open, onClose, onChanged, presetDriver }: { op
         }}
       >
         <p>
-          Record {naira(numericAmount || 0)} for {driver ? driverLabel(driver) : "this driver"}. This credits the EV wallet immediately and cannot be undone.
+          Send {naira(numericAmount || 0)} from the LotGrids fleet wallet to {driver ? driverLabel(driver) : "this driver"}. This credits their EV wallet immediately and cannot be undone.
         </p>
       </ConfirmDialog>
     </>
@@ -582,7 +610,18 @@ function AllocationDetail({ id, onClose, driver }: { id: string | null; onClose:
             <Detail label="Rate" value={naira(allocation.rate_per_kwh, 2)} />
             <Detail label="Created" value={formatDateTime(allocation.created_at)} />
             <Detail label="Paid" value={allocation.paid_at ? formatDateTime(allocation.paid_at) : "Not paid"} />
-            <Detail label="Confirmed" value={allocation.confirmed_at ? formatDateTime(allocation.confirmed_at) : "Not confirmed"} />
+            {allocation.type === "PAID_TOPUP" && (
+              <Detail
+                label="LotGrids allocation"
+                value={
+                  allocation.status !== "COMPLETED"
+                    ? allocation.status === "AWAITING_ALLOCATION" ? "Not allocated yet" : "Not allocated"
+                    : allocation.confirmed_by
+                      ? `Retried by an admin${allocation.confirmed_at ? ` · ${formatDateTime(allocation.confirmed_at)}` : ""}`
+                      : "Automatic"
+                }
+              />
+            )}
             <Detail label="Payment reference" value={allocation.payment_reference ?? "None"} />
             <Detail label="Checkout reference" value={allocation.checkout_transaction_reference ?? "None"} />
             <Detail label="Checkout account" value={allocation.checkout_account_number ? `${allocation.checkout_account_name ?? ""} ${allocation.checkout_account_number}`.trim() : "None"} />
@@ -604,24 +643,24 @@ function Detail({ label, value }: { label: string; value: string }) {
   );
 }
 
-function ConfirmAllocationDialog({ allocation, onClose, onChanged }: { allocation: WalletAllocation | null; onClose: () => void; onChanged: () => void }) {
+function RetryAllocationDialog({ allocation, onClose, onChanged }: { allocation: WalletAllocation | null; onClose: () => void; onChanged: () => void }) {
   const queryClient = useQueryClient();
   const toast = useToast();
-  const [checked, setChecked] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const mutation = useMutation({
-    mutationFn: () => confirmWalletAllocation(allocation!.id),
+    mutationFn: () => retryWalletAllocation(allocation!.id),
     onSuccess: (updated) => {
-      toast.success("Allocation confirmed.");
+      toast.success("Allocation completed and wallet credited.");
       queryClient.setQueryData(queryKeys.walletAllocations.detail(updated.id), updated);
       onChanged();
-      setChecked(false);
       setError(null);
       onClose();
     },
     onError: (err) => {
-      setError(errorMessage(err, "Could not confirm this allocation."));
-      onChanged();
+      const message = errorMessage(err, "Could not retry this allocation.");
+      // 409 means it was already handled (or is no longer awaiting); refetch to show its real state.
+      if (err instanceof ApiError && err.status === 409) onChanged();
+      setError(message);
     },
   });
 
@@ -629,25 +668,22 @@ function ConfirmAllocationDialog({ allocation, onClose, onChanged }: { allocatio
     <ConfirmDialog
       open={Boolean(allocation)}
       onClose={() => {
-        setChecked(false);
         setError(null);
         onClose();
       }}
-      title="Confirm LotGrid allocation"
-      confirmLabel="Confirm allocation"
+      title="Retry LotGrids allocation"
+      confirmLabel="Retry allocation"
       tone="primary"
       loading={mutation.isPending}
-      confirmDisabled={!checked}
       error={error}
-      onConfirm={() => mutation.mutate()}
+      onConfirm={() => {
+        setError(null);
+        mutation.mutate();
+      }}
     >
       <p>
-        Confirm that {allocation ? naira(allocation.amount) : "this amount"} has already been allocated on LotGrid. This cannot be undone.
+        {allocation ? naira(allocation.amount) : "This amount"} was paid but could not be allocated to the driver on LotGrids. Make sure the fleet wallet on the LotGrids Partner Dashboard has enough balance, then retry. The driver&apos;s wallet is credited as soon as it goes through.
       </p>
-      <label className="flex items-start gap-2 rounded-lg border border-border bg-subtle p-3 text-foreground">
-        <input type="checkbox" checked={checked} onChange={(event) => setChecked(event.target.checked)} className="mt-1 size-4 rounded border-input" />
-        <span>I have allocated this on LotGrid.</span>
-      </label>
     </ConfirmDialog>
   );
 }

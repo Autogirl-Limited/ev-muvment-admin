@@ -75,8 +75,21 @@ export function recordFreeGrant(input: { user_id: string; amount: number; notes?
   });
 }
 
-export function confirmWalletAllocation(id: string) {
+/**
+ * Retries the LotGrids allocation of a paid top-up that is stuck in `AWAITING_ALLOCATION`.
+ * Paid top-ups are allocated automatically, so this is only for ones that failed (e.g. fleet wallet was short).
+ * Same endpoint as before; the API still calls it `confirm-allocation`.
+ */
+export function retryWalletAllocation(id: string) {
   return apiFetch<WalletAllocation>(`/wallet-allocations/${id}/confirm-allocation`, { method: "POST" });
+}
+
+/**
+ * A free grant that timed out mid-flight: LotGrids may or may not have moved the money.
+ * The admin must check the driver's balance before granting again.
+ */
+export function isAmbiguousLotGridsTimeout(message: string) {
+  return /didn'?t confirm the request in time/i.test(message);
 }
 
 export function getTopupPreview(amount: number, signal?: AbortSignal) {

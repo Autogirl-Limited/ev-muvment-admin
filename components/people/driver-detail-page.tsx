@@ -247,11 +247,11 @@ export function DriverDetailPage({ id }: { id: string }) {
 
       {/* Cross-feature KPIs, each jumping to the filtered screen */}
       <section aria-label="Overview" className="grid gap-3 sm:grid-cols-3">
-        <Tile label="EV wallet" value={naira(driver.ev_wallet_balance)} hint="Total credited · open ledger" href={`/wallet?userId=${id}&range=all`} />
+        <Tile label="EV wallet" value={naira(driver.ev_wallet_balance)} hint="As of last top-up · open ledger" href={`/wallet?userId=${id}&range=all`} />
         <Tile
           label="Awaiting allocation"
           value={awaiting.data?.pagination.total_items ?? 0}
-          hint="Paid top-ups to allocate on LotGrid"
+          hint="Paid top-ups LotGrids didn't accept"
           href={`/wallet?userId=${id}&status=AWAITING_ALLOCATION&range=all`}
           tone={(awaiting.data?.pagination.total_items ?? 0) > 0 ? "text-brand" : ""}
           loading={awaiting.isLoading}

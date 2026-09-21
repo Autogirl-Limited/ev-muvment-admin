@@ -368,7 +368,8 @@ export function DriverApplicationsPage() {
     },
     onError: (error) => {
       if (error instanceof ApiError) {
-        if (error.status === 502) return setNotice(`${error.message} Nothing was created, so it is safe to try again.`);
+        if (error.status === 502) return setNotice(`${error.message} Nothing was created and the application is still pending, so it is safe to try again.`);
+        if (error.status === 503) return setNotice(`${error.message} LotGrids isn't configured on the server yet, so applications can't be approved until it is.`);
         if (error.status === 409 && /already been/i.test(error.message)) {
           invalidateApplications();
           setApproveTarget(null);
@@ -573,7 +574,7 @@ export function DriverApplicationsPage() {
                 </div>
                 {selected.status === "APPROVED" && (
                   <div className="rounded-lg bg-surface p-3 text-sm sm:min-w-48">
-                    <p className="text-xs text-muted">EV wallet balance</p>
+                    <p className="text-xs text-muted">EV wallet balance (as of last top-up)</p>
                     <p className="mt-1 text-lg font-semibold">{naira(selected.ev_wallet_balance)}</p>
                   </div>
                 )}
@@ -631,7 +632,7 @@ export function DriverApplicationsPage() {
         {approveTarget && (
           <div className="space-y-4">
             <p className="text-sm text-muted">
-              This creates {fullName(approveTarget)}&apos;s driver account and dedicated bank account, then sends login details by {approveTarget.email ? "email" : "SMS"}. Approval is final and may take several seconds.
+              This creates {fullName(approveTarget)}&apos;s driver account, dedicated bank account and LotGrids driver wallet, then sends login details by {approveTarget.email ? "email" : "SMS"}. Approval is final and may take several seconds.
             </p>
             <ModalActions>
               <Button variant="secondary" disabled={approve.isPending} onClick={() => setApproveTarget(null)}>Cancel</Button>

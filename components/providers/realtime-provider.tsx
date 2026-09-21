@@ -91,7 +91,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
           queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
           toast.info(
             allocation?.status === "AWAITING_ALLOCATION"
-              ? `${naira(allocation.amount)} is ready to allocate on LotGrid.`
+              ? `${naira(allocation.amount)} was paid but isn't allocated on LotGrids yet. Retry it from EV Wallet if it stays that way.`
               : "Wallet allocation updated.",
           );
           break;
