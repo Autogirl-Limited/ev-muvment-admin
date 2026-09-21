@@ -1,7 +1,9 @@
 "use client";
 
-import { useTransition, type ReactNode } from "react";
+import { useState, useTransition, type ReactNode } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Modal, ModalActions } from "@/components/ui/modal";
 import { logout } from "@/lib/auth/actions";
 import { AUTH_CHANNEL, LOGIN_PATH } from "@/lib/auth/constants";
 
@@ -12,6 +14,7 @@ export function SignOutButton({
   children: ReactNode;
   variant?: "menu" | "link";
 }) {
+  const [confirming, setConfirming] = useState(false);
   const [pending, startTransition] = useTransition();
 
   function signOut() {
@@ -34,17 +37,41 @@ export function SignOutButton({
   }
 
   return (
-    <button
-      type="button"
-      onClick={signOut}
-      disabled={pending}
-      className={
-        variant === "link"
-          ? "font-medium text-brand hover:underline disabled:opacity-60"
-          : "flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-muted transition hover:bg-subtle hover:text-foreground disabled:opacity-60"
-      }
-    >
-      {pending ? "Signing out…" : children}
-    </button>
+    <>
+      <button
+        type="button"
+        onClick={() => setConfirming(true)}
+        disabled={pending}
+        className={
+          variant === "link"
+            ? "font-medium text-brand hover:underline disabled:opacity-60"
+            : "flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-muted transition hover:bg-subtle hover:text-foreground disabled:opacity-60"
+        }
+      >
+        {pending ? "Signing out…" : children}
+      </button>
+
+      <Modal
+        open={confirming}
+        onClose={() => {
+          if (!pending) setConfirming(false);
+        }}
+        title="Sign out?"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted">
+            Are you sure you want to sign out of your account?
+          </p>
+          <ModalActions>
+            <Button variant="ghost" disabled={pending} onClick={() => setConfirming(false)}>
+              Cancel
+            </Button>
+            <Button variant="danger" loading={pending} onClick={signOut}>
+              Sign out
+            </Button>
+          </ModalActions>
+        </div>
+      </Modal>
+    </>
   );
 }
