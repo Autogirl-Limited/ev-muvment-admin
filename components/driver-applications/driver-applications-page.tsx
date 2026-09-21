@@ -212,6 +212,64 @@ function DetailTile({ label, children }: { label: string; children: ReactNode })
   );
 }
 
+function CredentialSendMenu({
+  email,
+  phone,
+  loading,
+  onSend,
+}: {
+  email: string | null;
+  phone: string | null;
+  loading: boolean;
+  onSend: (channel: "EMAIL" | "SMS") => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const hasEmail = Boolean(email);
+  const hasPhone = Boolean(phone);
+
+  return (
+    <div className="relative">
+      <Button variant="secondary" disabled={loading || (!hasEmail && !hasPhone)} onClick={() => setOpen((value) => !value)} fullWidth>
+        Send Credential
+      </Button>
+      {open && (
+        <div className="mt-2 w-full rounded-lg border border-border bg-surface p-2 shadow-card sm:absolute sm:left-0 sm:z-20 sm:w-64">
+          <button
+            type="button"
+            disabled={!hasEmail || loading}
+            onClick={() => {
+              onSend("EMAIL");
+              setOpen(false);
+            }}
+            className="flex w-full items-start gap-3 rounded-lg px-3 py-2 text-left text-sm transition hover:bg-subtle disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <span className="mt-0.5 size-2 rounded-full bg-brand" />
+            <span className="min-w-0">
+              <span className="block font-medium">Email</span>
+              <span className="block truncate text-xs text-muted">{email ?? "No email on file"}</span>
+            </span>
+          </button>
+          <button
+            type="button"
+            disabled={!hasPhone || loading}
+            onClick={() => {
+              onSend("SMS");
+              setOpen(false);
+            }}
+            className="mt-1 flex w-full items-start gap-3 rounded-lg px-3 py-2 text-left text-sm transition hover:bg-subtle disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <span className="mt-0.5 size-2 rounded-full bg-brand" />
+            <span className="min-w-0">
+              <span className="block font-medium">SMS</span>
+              <span className="block truncate text-xs text-muted">{phone ?? "No phone on file"}</span>
+            </span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function useDebounced(value: string, delay = 400) {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -552,8 +610,12 @@ export function DriverApplicationsPage() {
               )}
               {selected.status === "APPROVED" && selected.user_id && (
                 <>
-                  <Button variant="secondary" disabled={!selected.email || resend.isPending} onClick={() => resend.mutate({ userId: selected.user_id!, channel: "EMAIL" })}>Email credentials</Button>
-                  <Button variant="secondary" disabled={!selected.phone_number || resend.isPending} onClick={() => resend.mutate({ userId: selected.user_id!, channel: "SMS" })}>SMS credentials</Button>
+                  <CredentialSendMenu
+                    email={selected.email}
+                    phone={selected.phone_number}
+                    loading={resend.isPending}
+                    onSend={(channel) => resend.mutate({ userId: selected.user_id!, channel })}
+                  />
                   <a className="inline-flex h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-medium hover:bg-subtle" href={`/users/${selected.user_id}`}>View driver profile</a>
                   <a className="inline-flex h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-medium hover:bg-subtle" href={`/dva-transactions?userId=${selected.user_id}`}>View transactions</a>
                 </>
@@ -607,8 +669,12 @@ export function DriverApplicationsPage() {
             <div className="flex flex-wrap gap-2">
               {approvedApp.user_id && (
                 <>
-                  <Button variant="secondary" disabled={!approvedApp.email || resend.isPending} onClick={() => resend.mutate({ userId: approvedApp.user_id!, channel: "EMAIL" })}>Email credentials</Button>
-                  <Button variant="secondary" disabled={!approvedApp.phone_number || resend.isPending} onClick={() => resend.mutate({ userId: approvedApp.user_id!, channel: "SMS" })}>SMS credentials</Button>
+                  <CredentialSendMenu
+                    email={approvedApp.email}
+                    phone={approvedApp.phone_number}
+                    loading={resend.isPending}
+                    onSend={(channel) => resend.mutate({ userId: approvedApp.user_id!, channel })}
+                  />
                   <a className="inline-flex h-10 items-center rounded-lg bg-brand px-4 text-sm font-medium text-brand-foreground hover:brightness-110" href={`/users/${approvedApp.user_id}`}>View profile</a>
                 </>
               )}
