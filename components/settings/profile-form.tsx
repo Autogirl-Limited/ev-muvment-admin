@@ -6,6 +6,7 @@ import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { ApiError } from "@/lib/api/browser";
+import { advanceToEmptyField } from "@/lib/form-nav";
 import { ROLE_LABELS } from "@/lib/navigation";
 import { useCurrentUser, useUpdateProfile } from "@/lib/query/user";
 
@@ -45,7 +46,7 @@ export function ProfileForm() {
   }
 
   return (
-    <form onSubmit={submit} className="space-y-4" noValidate>
+    <form onSubmit={submit} onKeyDown={advanceToEmptyField} className="space-y-4" noValidate>
       {formError && <Alert tone="error">{formError}</Alert>}
       {update.isSuccess && !dirty && <Alert tone="success">Profile updated.</Alert>}
 

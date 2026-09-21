@@ -4,11 +4,18 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { apiRequest, type ApiFailure } from "@/lib/api/client";
-import type { LoginResponse, TotpSetupResponse, TwoFactorMethod } from "@/lib/api/types";
+import type { LoginResponse, TotpSetupResponse, TwoFactorMethod, User } from "@/lib/api/types";
 import { fail, succeed, type ActionResult } from "./action-result";
-import { CHANGE_PASSWORD_REQUIRED_PATH, MUST_CHANGE_COOKIE, REFRESH_COOKIE } from "./constants";
+import {
+  CHANGE_PASSWORD_REQUIRED_PATH,
+  MUST_CHANGE_COOKIE,
+  REFRESH_COOKIE,
+  SETUP_2FA_COOKIE,
+  SETUP_2FA_PATH,
+} from "./constants";
 import { authedRequest } from "./dal";
 import { safeNextPath } from "./redirect";
+import { hasTwoFactor } from "./two-factor";
 import { clearSessionCookies, writeSessionCookies } from "./session";
 
 const PASSWORD_MIN = 8;
@@ -108,11 +115,10 @@ async function finishLogin(
   }
 
   writeSessionCookies(await cookies(), data);
-  redirect(
-    data.has_changed_temporary_password === false
-      ? CHANGE_PASSWORD_REQUIRED_PATH
-      : safeNextPath(next),
-  );
+  // Onboarding order: replace a temporary password, then set up 2FA, then go on.
+  if (data.has_changed_temporary_password === false) redirect(CHANGE_PASSWORD_REQUIRED_PATH);
+  if (!hasTwoFactor(data.user)) redirect(SETUP_2FA_PATH);
+  redirect(safeNextPath(next));
 }
 
 /**
@@ -208,11 +214,29 @@ export async function confirmEmailOtp(input: { code: string }): Promise<ActionRe
 
   const result = await authedRequest("/auth/2fa/email/confirm", { body: { code } });
   if (!result.ok) return fromApi(result);
+  (await cookies()).delete(SETUP_2FA_COOKIE); // a second factor now exists
   return succeed(result.message, null);
+}
+
+/**
+ * Policy: 2FA is mandatory, so the last method can never be turned off. The
+ * API would allow it, so this is enforced here (and hidden in the UI).
+ */
+async function refuseIfLastMethod(
+  disabling: "email" | "totp",
+): Promise<Extract<ActionResult, { ok: false }> | null> {
+  const me = await authedRequest<User>("/users/me", { method: "GET" });
+  if (!me.ok) return fromApi(me);
+  const other = disabling === "email" ? me.data.totp_enabled : me.data.two_factor_enabled;
+  return other
+    ? null
+    : fail("Two-factor authentication is required. Set up another method before turning this one off.");
 }
 
 export async function disableEmailOtp(input: { password: string }): Promise<ActionResult> {
   if (!input.password) return fail("", { password: "Enter your password." });
+  const refusal = await refuseIfLastMethod("email");
+  if (refusal) return refusal;
   const result = await authedRequest("/auth/2fa/email/disable", {
     body: { password: input.password },
   });
@@ -231,11 +255,14 @@ export async function confirmTotp(input: { code: string }): Promise<ActionResult
 
   const result = await authedRequest("/auth/2mfa/totp/confirm", { body: { code } });
   if (!result.ok) return fromApi(result);
+  (await cookies()).delete(SETUP_2FA_COOKIE); // a second factor now exists
   return succeed(result.message, null);
 }
 
 export async function disableTotp(input: { password: string }): Promise<ActionResult> {
   if (!input.password) return fail("", { password: "Enter your password." });
+  const refusal = await refuseIfLastMethod("totp");
+  if (refusal) return refusal;
   const result = await authedRequest("/auth/2mfa/totp/disable", {
     body: { password: input.password },
   });

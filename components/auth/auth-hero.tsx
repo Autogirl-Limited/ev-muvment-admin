@@ -10,14 +10,17 @@ import { Logo } from "@/components/brand/logo";
 export function AuthHero() {
   return (
     <aside className="relative isolate hidden overflow-hidden bg-[#03110d] text-white lg:sticky lg:top-0 lg:block lg:h-dvh">
-      <Image
-        src="/auth-hero.svg"
-        alt=""
-        fill
-        priority
-        sizes="(min-width: 1024px) 50vw, 0px"
-        className="-z-20 object-cover"
-      />
+      {/* Own absolutely positioned box: next/image "fill" needs a relative/absolute parent, and the aside is sticky. */}
+      <div className="absolute inset-0 -z-20">
+        <Image
+          src="/auth-hero.svg"
+          alt=""
+          fill
+          priority
+          sizes="(min-width: 1024px) 50vw, 0px"
+          className="object-cover"
+        />
+      </div>
       {/* Scrim keeps the copy readable over any image. */}
       <div aria-hidden className="absolute inset-0 -z-10 bg-linear-to-t from-black/85 via-black/20 to-black/40" />
 

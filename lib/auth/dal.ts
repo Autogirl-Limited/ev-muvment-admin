@@ -11,8 +11,10 @@ import {
   CHANGE_PASSWORD_REQUIRED_PATH,
   LOGIN_PATH,
   MUST_CHANGE_COOKIE,
+  SETUP_2FA_PATH,
   type SessionEndReason,
 } from "./constants";
+import { hasTwoFactor } from "./two-factor";
 
 /** Sends the user to the login page; the proxy clears the dead cookies on arrival. */
 export function endSession(reason: SessionEndReason): never {
@@ -69,10 +71,17 @@ export const getCurrentUser = cache(async (): Promise<User> => {
   return result.data;
 });
 
-/** Use in pages that require a real profile and a completed password change. */
+/**
+ * Use in pages that need a fully onboarded user: password changed and a second
+ * factor set up. The proxy already redirects on the flag cookies, but this is
+ * the authoritative check against the real account, so it also catches a
+ * cookie that has drifted from the account.
+ */
 export async function requireUser(): Promise<User> {
   if (await mustChangePassword()) redirect(CHANGE_PASSWORD_REQUIRED_PATH);
-  return getCurrentUser();
+  const user = await getCurrentUser();
+  if (!hasTwoFactor(user)) redirect(SETUP_2FA_PATH);
+  return user;
 }
 
 export function hasRole(user: User, allowed: readonly UserType[]): boolean {

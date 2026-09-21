@@ -10,6 +10,7 @@ import { Field } from "@/components/ui/field";
 import { PasswordField } from "@/components/ui/password-field";
 import type { TwoFactorMethod } from "@/lib/api/types";
 import { login, verifyTwoFactor } from "@/lib/auth/actions";
+import { advanceToEmptyField } from "@/lib/form-nav";
 
 const RESEND_COOLDOWN_SECONDS = 30;
 
@@ -171,13 +172,14 @@ export function LoginForm({ next, notice }: { next?: string; notice?: string }) 
   }
 
   return (
-    <form onSubmit={submitCredentials} className="space-y-4" noValidate>
+    <form onSubmit={submitCredentials} onKeyDown={advanceToEmptyField} className="space-y-4" noValidate>
       {notice && <Alert tone="info">{notice}</Alert>}
       {error && <Alert tone="error">{error}</Alert>}
 
       <Field
         label="Username, email or phone"
         name="identifier"
+        enterKeyHint="next"
         autoComplete="username"
         autoCapitalize="none"
         spellCheck={false}
@@ -190,6 +192,7 @@ export function LoginForm({ next, notice }: { next?: string; notice?: string }) 
       <PasswordField
         label="Password"
         name="password"
+        enterKeyHint="go"
         autoComplete="current-password"
         value={password}
         onChange={(event) => setPassword(event.target.value)}

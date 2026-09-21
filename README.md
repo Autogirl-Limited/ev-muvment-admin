@@ -20,6 +20,8 @@ The API contract is in `ev-muvment-api/docs/2026/09/21/admin-and-account-officer
 - **`proxy.ts`** guards routes optimistically (cookies only), forces the change-password screen while the account is on a temporary password, and refreshes tokens shortly before the access token expires. Refresh tokens are single-use, so refreshes are single-flight and the result is reused for 60s by requests still holding the old cookie.
 - **`lib/auth/dal.ts`** is the data-access layer: `getCurrentUser()` (role and 2FA flags come from `GET /users/me`, never the JWT), `requireUser()`, `hasRole()`. Authorization is checked next to the data, not in layouts.
 - **`lib/auth/actions.ts`** holds the auth Server Actions (sign-in, 2FA challenge, forgot/reset/change password, 2FA management). Plain data reads and writes go through TanStack Query instead (below).
+- **Two-factor authentication is mandatory.** After sign-in, a user with no method is held on `/setup-2fa` (after any temporary-password change) until they enable one. The proxy gates on the `ev_setup_2fa` cookie, which is recomputed from the user the API returns on every login and token refresh; `requireUser()` re-checks the real account, so a stale cookie cannot let anyone in. The data gateway also refuses calls until it is done. The last remaining method cannot be disabled: the button is disabled in the UI and the Server Action refuses, since the API itself would allow it.
+- Multi-field forms use `advanceToEmptyField` (`lib/form-nav.ts`): Enter jumps to the first empty field and only submits once nothing is empty.
 - A dead session is sent to `/login?reason=expired|ended`; the proxy clears leftover cookies on arrival.
 - Drivers can authenticate against the API but are refused here; this app is staff-only.
 

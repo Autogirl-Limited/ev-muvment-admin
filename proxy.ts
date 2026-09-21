@@ -10,6 +10,8 @@ import {
   PUBLIC_PATHS,
   REFRESH_COOKIE,
   SESSION_END_REASONS,
+  SETUP_2FA_COOKIE,
+  SETUP_2FA_PATH,
   type SessionEndReason,
 } from "@/lib/auth/constants";
 import { jwtExpiry } from "@/lib/auth/jwt";
@@ -57,6 +59,12 @@ export async function proxy(request: NextRequest) {
     ? refreshed.has_changed_temporary_password === false
     : request.cookies.get(MUST_CHANGE_COOKIE)?.value === "1";
 
+  // Policy: staff must have two-factor authentication. Recomputed from the
+  // user the API returns on refresh, otherwise read from the flag cookie.
+  const needs2fa = refreshed?.user
+    ? !refreshed.user.two_factor_enabled && !refreshed.user.totp_enabled
+    : request.cookies.get(SETUP_2FA_COOKIE)?.value === "1";
+
   const respond = (response: NextResponse) => {
     if (sessionDead) clearSessionCookies(response.cookies);
     else if (refreshed) writeSessionCookies(response.cookies, refreshed);
@@ -73,6 +81,9 @@ export async function proxy(request: NextRequest) {
     if (!signedIn) return respond(apiError(401, "Not signed in", "UNAUTHORIZED"));
     if (mustChange) {
       return respond(apiError(403, "You must set a new password first", "FORBIDDEN"));
+    }
+    if (needs2fa) {
+      return respond(apiError(403, "Set up two-factor authentication first", "FORBIDDEN"));
     }
     if (refreshed) {
       // The route handler reads the access cookie, so hand it the fresh one.
@@ -102,13 +113,22 @@ export async function proxy(request: NextRequest) {
   }
 
   if (isPublic || pathname === "/") {
-    return redirectTo(mustChange ? CHANGE_PASSWORD_REQUIRED_PATH : DASHBOARD_PATH);
+    return redirectTo(landingPath(mustChange, needs2fa));
   }
+  // Order matters: a temporary password is replaced first, then 2FA is set up.
   if (mustChange && pathname !== CHANGE_PASSWORD_REQUIRED_PATH) {
     return redirectTo(CHANGE_PASSWORD_REQUIRED_PATH);
   }
   if (!mustChange && pathname === CHANGE_PASSWORD_REQUIRED_PATH) {
-    return redirectTo(DASHBOARD_PATH);
+    return redirectTo(landingPath(false, needs2fa));
+  }
+  // /setup-2fa stays reachable even without the flag: the page itself checks
+  // the real user, which is what lets the dashboard send people there when the
+  // cookie and the account disagree (see requireUser).
+  // Only once the password step is behind them: without this guard, someone who
+  // needs both bounces between the two screens forever.
+  if (!mustChange && needs2fa && pathname !== SETUP_2FA_PATH) {
+    return redirectTo(SETUP_2FA_PATH);
   }
 
   // Forward refreshed tokens to the page being rendered as well as the browser,
@@ -125,6 +145,11 @@ export async function proxy(request: NextRequest) {
     return respond(NextResponse.next({ request: { headers: request.headers } }));
   }
   return NextResponse.next();
+}
+
+function landingPath(mustChange: boolean, needs2fa: boolean): string {
+  if (mustChange) return CHANGE_PASSWORD_REQUIRED_PATH;
+  return needs2fa ? SETUP_2FA_PATH : DASHBOARD_PATH;
 }
 
 function apiError(status: number, message: string, code: string) {

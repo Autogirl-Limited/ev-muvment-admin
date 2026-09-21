@@ -7,6 +7,7 @@ import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { PasswordField } from "@/components/ui/password-field";
 import { changePassword } from "@/lib/auth/actions";
+import { advanceToEmptyField } from "@/lib/form-nav";
 import { DASHBOARD_PATH } from "@/lib/auth/constants";
 
 /**
@@ -58,7 +59,7 @@ export function ChangePasswordForm({ forced = false }: { forced?: boolean }) {
   }
 
   return (
-    <form onSubmit={submit} className="space-y-4" noValidate>
+    <form onSubmit={submit} onKeyDown={advanceToEmptyField} className="space-y-4" noValidate>
       {error && <Alert tone="error">{error}</Alert>}
       {done && (
         <Alert tone="success">

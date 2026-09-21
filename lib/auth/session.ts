@@ -3,6 +3,7 @@ import {
   ACCESS_COOKIE,
   MUST_CHANGE_COOKIE,
   REFRESH_COOKIE,
+  SETUP_2FA_COOKIE,
 } from "./constants";
 import { jwtExpiry } from "./jwt";
 
@@ -48,10 +49,21 @@ export function writeSessionCookies(store: CookieWriter, data: LoginResponse): v
   } else {
     store.delete(MUST_CHANGE_COOKIE);
   }
+
+  // Policy: every staff member needs a second factor. Derived from the user the
+  // API returns on login/refresh, so it is recomputed from the truth each time.
+  if (data.user) {
+    if (!data.user.two_factor_enabled && !data.user.totp_enabled) {
+      store.set(SETUP_2FA_COOKIE, "1", options(data.refresh_token, 45));
+    } else {
+      store.delete(SETUP_2FA_COOKIE);
+    }
+  }
 }
 
 export function clearSessionCookies(store: CookieWriter): void {
   store.delete(ACCESS_COOKIE);
   store.delete(REFRESH_COOKIE);
   store.delete(MUST_CHANGE_COOKIE);
+  store.delete(SETUP_2FA_COOKIE);
 }

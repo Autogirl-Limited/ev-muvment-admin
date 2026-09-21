@@ -1,4 +1,9 @@
-import { PUBLIC_PATHS, CHANGE_PASSWORD_REQUIRED_PATH, DASHBOARD_PATH } from "./constants";
+import {
+  PUBLIC_PATHS,
+  CHANGE_PASSWORD_REQUIRED_PATH,
+  DASHBOARD_PATH,
+  SETUP_2FA_PATH,
+} from "./constants";
 
 /**
  * Validates a post-login destination taken from user-controlled input.
@@ -14,6 +19,7 @@ export function safeNextPath(next: string | null | undefined): string {
     pathname === "/" ||
     pathname.startsWith("/api/") ||
     pathname === CHANGE_PASSWORD_REQUIRED_PATH ||
+    pathname === SETUP_2FA_PATH ||
     PUBLIC_PATHS.includes(pathname)
   ) {
     return DASHBOARD_PATH;
