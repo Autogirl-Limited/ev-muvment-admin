@@ -1,26 +1,25 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { encode, getToken } from "next-auth/jwt";
 
 import {
-  ACCESS_COOKIE,
   API_PROXY_PREFIX,
   CHANGE_PASSWORD_REQUIRED_PATH,
   DASHBOARD_PATH,
   LOGIN_PATH,
-  MUST_CHANGE_COOKIE,
   PUBLIC_PATHS,
-  REFRESH_COOKIE,
   SESSION_END_REASONS,
-  SETUP_2FA_COOKIE,
   SETUP_2FA_PATH,
   type SessionEndReason,
 } from "@/lib/auth/constants";
-import { jwtExpiry } from "@/lib/auth/jwt";
-import { refreshTokens } from "@/lib/auth/refresh";
-import { clearSessionCookies, writeSessionCookies } from "@/lib/auth/session";
-import type { LoginResponse } from "@/lib/api/types";
-
-/** Refresh when the access token has less than this left. */
-const REFRESH_SKEW_MS = 5 * 60 * 1000;
+import {
+  authSecret,
+  NEXT_AUTH_MAX_AGE,
+  NEXT_AUTH_SESSION_COOKIE,
+  refreshAuthToken,
+  shouldRefreshAuthToken,
+  type EVAuthToken,
+} from "@/lib/auth/next-auth-shared";
+import { clearSessionCookies } from "@/lib/auth/session";
 
 /**
  * Optimistic session gate plus token refresh. Reads cookies only; real
@@ -30,44 +29,44 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isPublic = PUBLIC_PATHS.includes(pathname);
 
-  const access = request.cookies.get(ACCESS_COOKIE)?.value;
-  const refresh = request.cookies.get(REFRESH_COOKIE)?.value;
-
-  let refreshed: LoginResponse | null = null;
+  const token = (await getToken({
+    req: request,
+    secret: authSecret(),
+    cookieName: NEXT_AUTH_SESSION_COOKIE,
+  })) as EVAuthToken | null;
+  let authToken = token;
+  let encodedRefreshedToken: string | null = null;
   // Arriving at /login?reason=expired|ended means the session is over; drop any cookies.
   let sessionDead =
     pathname === LOGIN_PATH &&
     SESSION_END_REASONS.includes(request.nextUrl.searchParams.get("reason") as SessionEndReason);
 
-  if (refresh && !sessionDead) {
-    const accessExpiry = jwtExpiry(access);
-    const refreshExpiry = jwtExpiry(refresh);
-    const refreshUsable = refreshExpiry === null || refreshExpiry > Date.now();
-
-    if (!refreshUsable) {
+  if (authToken && !sessionDead && shouldRefreshAuthToken(authToken)) {
+    const refreshed = await refreshAuthToken(authToken);
+    if (refreshed.authError) {
       sessionDead = true;
-    } else if (accessExpiry === null || accessExpiry - Date.now() < REFRESH_SKEW_MS) {
-      const result = await refreshTokens(refresh);
-      if (result.ok) refreshed = result.data;
-      else if (result.reason === "invalid") sessionDead = true;
-      // "unavailable": carry on with the tokens we have rather than log out.
+    } else if (refreshed.accessToken !== authToken.accessToken) {
+      authToken = refreshed;
+      encodedRefreshedToken = await encode({
+        token: refreshed,
+        secret: authSecret(),
+        maxAge: NEXT_AUTH_MAX_AGE,
+      });
     }
   }
 
-  const signedIn = !sessionDead && Boolean(refreshed?.access_token ?? access);
-  const mustChange = refreshed
-    ? refreshed.has_changed_temporary_password === false
-    : request.cookies.get(MUST_CHANGE_COOKIE)?.value === "1";
+  const signedIn = !sessionDead && Boolean(authToken?.accessToken);
+  const mustChange = authToken?.hasChangedTemporaryPassword === false;
 
   // Policy: staff must have two-factor authentication. Recomputed from the
-  // user the API returns on refresh, otherwise read from the flag cookie.
-  const needs2fa = refreshed?.user
-    ? !refreshed.user.two_factor_enabled && !refreshed.user.totp_enabled
-    : request.cookies.get(SETUP_2FA_COOKIE)?.value === "1";
+  // user the API returns on login/refresh.
+  const needs2fa = authToken?.user
+    ? !authToken.user.two_factor_enabled && !authToken.user.totp_enabled
+    : false;
 
   const respond = (response: NextResponse) => {
-    if (sessionDead) clearSessionCookies(response.cookies);
-    else if (refreshed) writeSessionCookies(response.cookies, refreshed);
+    if (sessionDead) clearAuthCookies(response);
+    else if (authToken && encodedRefreshedToken) writeAuthCookie(response, authToken, encodedRefreshedToken);
     return response;
   };
   const redirectTo = (path: string, search?: URLSearchParams) => {
@@ -85,15 +84,9 @@ export async function proxy(request: NextRequest) {
     if (needs2fa) {
       return respond(apiError(403, "Set up two-factor authentication first", "FORBIDDEN"));
     }
-    if (refreshed) {
+    if (authToken && encodedRefreshedToken) {
       // The route handler reads the access cookie, so hand it the fresh one.
-      writeSessionCookies(
-        {
-          set: (name, value) => request.cookies.set(name, value),
-          delete: (name) => request.cookies.delete(name),
-        },
-        refreshed,
-      );
+      request.cookies.set(NEXT_AUTH_SESSION_COOKIE, encodedRefreshedToken);
       return respond(NextResponse.next({ request: { headers: request.headers } }));
     }
     return NextResponse.next();
@@ -133,15 +126,8 @@ export async function proxy(request: NextRequest) {
 
   // Forward refreshed tokens to the page being rendered as well as the browser,
   // so Server Components in this same request already see the new access token.
-  if (refreshed) {
-    writeSessionCookies(
-      {
-        // RequestCookies takes no attributes; they only matter on the response.
-        set: (name, value) => request.cookies.set(name, value),
-        delete: (name) => request.cookies.delete(name),
-      },
-      refreshed,
-    );
+  if (authToken && encodedRefreshedToken) {
+    request.cookies.set(NEXT_AUTH_SESSION_COOKIE, encodedRefreshedToken);
     return respond(NextResponse.next({ request: { headers: request.headers } }));
   }
   return NextResponse.next();
@@ -157,6 +143,21 @@ function apiError(status: number, message: string, code: string) {
     { status: "error", message, data: null, error: { code, details: null } },
     { status, headers: { "Cache-Control": "no-store" } },
   );
+}
+
+function writeAuthCookie(response: NextResponse, token: EVAuthToken, value: string) {
+  response.cookies.set(NEXT_AUTH_SESSION_COOKIE, value, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    expires: new Date(token.refreshTokenExpires ?? Date.now() + NEXT_AUTH_MAX_AGE * 1000),
+  });
+}
+
+function clearAuthCookies(response: NextResponse) {
+  response.cookies.delete(NEXT_AUTH_SESSION_COOKIE);
+  clearSessionCookies(response.cookies);
 }
 
 export const config = {

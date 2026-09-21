@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useTransition, type ReactNode } from "react";
+import { signOut as nextAuthSignOut } from "next-auth/react";
 
 import { Button } from "@/components/ui/button";
 import { Modal, ModalActions } from "@/components/ui/modal";
-import { logout } from "@/lib/auth/actions";
 import { AUTH_CHANNEL, LOGIN_PATH } from "@/lib/auth/constants";
 
 export function SignOutButton({
@@ -20,7 +20,7 @@ export function SignOutButton({
   function signOut() {
     startTransition(async () => {
       try {
-        await logout();
+        await nextAuthSignOut({ redirect: false });
       } catch {
         // Nothing more to do; the redirect below still leaves the app.
       }

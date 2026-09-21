@@ -1,19 +1,17 @@
 import "server-only";
 
 import { cache } from "react";
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { apiRequest, type ApiResult } from "@/lib/api/client";
 import type { User, UserType } from "@/lib/api/types";
 import {
-  ACCESS_COOKIE,
   CHANGE_PASSWORD_REQUIRED_PATH,
   LOGIN_PATH,
-  MUST_CHANGE_COOKIE,
   SETUP_2FA_PATH,
   type SessionEndReason,
 } from "./constants";
+import { readAuthTokenFromCookies } from "./next-auth-cookie";
 import { hasTwoFactor } from "./two-factor";
 
 /** Sends the user to the login page; the proxy clears the dead cookies on arrival. */
@@ -37,10 +35,10 @@ export async function authedRequest<T = null>(
   path: string,
   init: { method?: "GET" | "POST" | "PATCH" | "DELETE"; body?: unknown } = {},
 ): Promise<ApiResult<T>> {
-  const token = (await cookies()).get(ACCESS_COOKIE)?.value;
-  if (!token) endSession("expired");
+  const token = await readAuthTokenFromCookies();
+  if (!token?.accessToken) endSession("expired");
 
-  const result = await apiRequest<T>(path, { ...init, token });
+  const result = await apiRequest<T>(path, { ...init, token: token.accessToken });
   if (
     !result.ok &&
     (result.status === 401 ||
@@ -52,7 +50,8 @@ export async function authedRequest<T = null>(
 }
 
 export async function mustChangePassword(): Promise<boolean> {
-  return (await cookies()).get(MUST_CHANGE_COOKIE)?.value === "1";
+  const token = await readAuthTokenFromCookies();
+  return token?.hasChangedTemporaryPassword === false;
 }
 
 /**

@@ -1,14 +1,18 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { getToken } from "next-auth/jwt";
 
 import { forwardToApi } from "@/lib/api/client";
-import { ACCESS_COOKIE } from "@/lib/auth/constants";
+import {
+  authSecret,
+  NEXT_AUTH_SESSION_COOKIE,
+  type EVAuthToken,
+} from "@/lib/auth/next-auth-shared";
 
 /**
- * Same-origin gateway for browser data fetching (TanStack Query). The access
- * token lives in an httpOnly cookie that page JavaScript can't read, so the
- * browser calls /api/proxy/<api path> and this handler adds the Bearer token
- * and forwards to the EV Muvment API. proxy.ts runs first and refreshes an
- * expiring token, so the cookie read here is current.
+ * Same-origin gateway for browser data fetching (TanStack Query). The EV API
+ * access token lives inside the encrypted NextAuth cookie, so page JavaScript
+ * can't read it. The browser calls /api/proxy/<api path>; this handler decodes
+ * the server-side JWT, adds the Bearer token and forwards to the EV API.
  */
 
 const NO_STORE = { "Cache-Control": "no-store" };
@@ -46,8 +50,12 @@ async function handle(request: NextRequest, ctx: RouteContext<"/api/proxy/[...pa
     return errorResponse(403, "Cross-site request blocked", "FORBIDDEN");
   }
 
-  const token = request.cookies.get(ACCESS_COOKIE)?.value;
-  if (!token) {
+  const token = (await getToken({
+    req: request,
+    secret: authSecret(),
+    cookieName: NEXT_AUTH_SESSION_COOKIE,
+  })) as EVAuthToken | null;
+  if (!token?.accessToken) {
     return errorResponse(401, "Not signed in", "UNAUTHORIZED");
   }
 
@@ -55,7 +63,7 @@ async function handle(request: NextRequest, ctx: RouteContext<"/api/proxy/[...pa
   const upstream = await forwardToApi(`${path}${request.nextUrl.search}`, {
     method: request.method as "GET" | "POST" | "PATCH" | "DELETE",
     rawBody: hasBody ? (await request.text()) || undefined : undefined,
-    token,
+    token: token.accessToken,
   });
 
   return new NextResponse(upstream.body, {

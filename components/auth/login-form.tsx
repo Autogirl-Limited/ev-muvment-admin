@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { getSession, signIn } from "next-auth/react";
 import { useEffect, useState, useTransition } from "react";
 
 import { Alert } from "@/components/ui/alert";
@@ -9,7 +11,12 @@ import { CodeField } from "@/components/ui/code-field";
 import { Field } from "@/components/ui/field";
 import { PasswordField } from "@/components/ui/password-field";
 import type { TwoFactorMethod } from "@/lib/api/types";
-import { login, verifyTwoFactor } from "@/lib/auth/actions";
+import {
+  CHANGE_PASSWORD_REQUIRED_PATH,
+  DASHBOARD_PATH,
+  SETUP_2FA_PATH,
+} from "@/lib/auth/constants";
+import { hasTwoFactor } from "@/lib/auth/two-factor";
 import { advanceToEmptyField } from "@/lib/form-nav";
 
 const RESEND_COOLDOWN_SECONDS = 30;
@@ -26,6 +33,7 @@ function maskEmail(identifier: string): string | null {
 }
 
 export function LoginForm({ next, notice }: { next?: string; notice?: string }) {
+  const router = useRouter();
   const [identifier, setIdentifier] = useState("");
   // Held in memory only, and only so "Resend code" can re-run the password step.
   const [password, setPassword] = useState("");
@@ -44,6 +52,28 @@ export function LoginForm({ next, notice }: { next?: string; notice?: string }) 
     return () => clearTimeout(timer);
   }, [cooldown]);
 
+  function landingPath(session: Awaited<ReturnType<typeof getSession>>): string {
+    if (session?.hasChangedTemporaryPassword === false) return CHANGE_PASSWORD_REQUIRED_PATH;
+    if (session?.user && !hasTwoFactor(session.user)) return SETUP_2FA_PATH;
+    return next ?? DASHBOARD_PATH;
+  }
+
+  async function loadChallengeFromSession() {
+    const session = await getSession();
+    if (session?.authStep === "two_factor" && session.twoFactorChallenge) {
+      setChallenge({
+        method: session.twoFactorChallenge.method,
+        token: session.twoFactorChallenge.token,
+      });
+      return true;
+    }
+    if (session?.authStep === "authenticated") {
+      router.replace(landingPath(session));
+      return true;
+    }
+    return false;
+  }
+
   function backToCredentials(message: string | null) {
     setChallenge(null);
     setCode("");
@@ -57,17 +87,27 @@ export function LoginForm({ next, notice }: { next?: string; notice?: string }) 
     event.preventDefault();
     setError(null);
     setFieldErrors({});
+    const trimmedIdentifier = identifier.trim();
+    const nextFieldErrors: Record<string, string> = {};
+    if (!trimmedIdentifier) nextFieldErrors.identifier = "Enter your username, email or phone number.";
+    if (!password) nextFieldErrors.password = "Enter your password.";
+    if (Object.keys(nextFieldErrors).length) {
+      setFieldErrors(nextFieldErrors);
+      return;
+    }
+
     startTransition(async () => {
-      const result = await login({ identifier, password, next });
-      // On success without 2FA the action redirects and never returns here.
-      if (!result) return;
-      if (!result.ok) {
-        setError(result.message || null);
-        setFieldErrors(result.fieldErrors);
+      const result = await signIn("credentials", {
+        redirect: false,
+        mode: "password",
+        identifier: trimmedIdentifier,
+        password,
+      });
+      if (result?.error) {
+        setError(result.error);
         return;
       }
-      setChallenge({ method: result.data.method, token: result.data.challengeToken });
-      setCooldown(RESEND_COOLDOWN_SECONDS);
+      if (await loadChallengeFromSession()) setCooldown(RESEND_COOLDOWN_SECONDS);
     });
   }
 
@@ -76,20 +116,24 @@ export function LoginForm({ next, notice }: { next?: string; notice?: string }) 
     setError(null);
     setInfo(null);
     startTransition(async () => {
-      const result = await verifyTwoFactor({
+      const result = await signIn("credentials", {
+        redirect: false,
+        mode: "twoFactor",
         method: challenge.method,
         challengeToken: challenge.token,
-        code: value,
-        next,
+        code: value.trim(),
       });
-      if (!result) return; // redirected
-      if (result.ok) return;
-      if (result.challengeExpired) {
+      if (result?.error?.toLowerCase().includes("login challenge")) {
         backToCredentials("Your verification expired. Please sign in again.");
         return;
       }
-      setCode("");
-      setError(result.message || null);
+      if (result?.error) {
+        setCode("");
+        setError(result.error);
+        return;
+      }
+      const session = await getSession();
+      router.replace(landingPath(session));
     });
   }
 
@@ -100,13 +144,17 @@ export function LoginForm({ next, notice }: { next?: string; notice?: string }) 
     startTransition(async () => {
       // There's no resend endpoint: signing in again emails a fresh code and
       // returns a new challenge token that supersedes the old one.
-      const result = await login({ identifier, password, next });
-      if (!result) return;
-      if (!result.ok) {
-        setError(result.message || null);
+      const result = await signIn("credentials", {
+        redirect: false,
+        mode: "password",
+        identifier: identifier.trim(),
+        password,
+      });
+      if (result?.error) {
+        setError(result.error);
         return;
       }
-      setChallenge({ method: result.data.method, token: result.data.challengeToken });
+      await loadChallengeFromSession();
       setCode("");
       setCooldown(RESEND_COOLDOWN_SECONDS);
       setInfo("We've sent a new code.");

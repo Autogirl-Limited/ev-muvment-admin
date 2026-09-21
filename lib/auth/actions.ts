@@ -1,22 +1,10 @@
 "use server";
 
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
-
 import { apiRequest, type ApiFailure } from "@/lib/api/client";
-import type { LoginResponse, TotpSetupResponse, TwoFactorMethod, User } from "@/lib/api/types";
+import type { TotpSetupResponse, User } from "@/lib/api/types";
 import { fail, succeed, type ActionResult } from "./action-result";
-import {
-  CHANGE_PASSWORD_REQUIRED_PATH,
-  MUST_CHANGE_COOKIE,
-  REFRESH_COOKIE,
-  SETUP_2FA_COOKIE,
-  SETUP_2FA_PATH,
-} from "./constants";
 import { authedRequest } from "./dal";
-import { safeNextPath } from "./redirect";
-import { hasTwoFactor } from "./two-factor";
-import { clearSessionCookies, writeSessionCookies } from "./session";
+import { updateAuthToken } from "./next-auth-cookie";
 
 const PASSWORD_MIN = 8;
 const PASSWORD_MAX = 128;
@@ -30,110 +18,6 @@ function passwordError(password: string, field: string): Record<string, string> 
     return { [field]: `Password must be ${PASSWORD_MIN}–${PASSWORD_MAX} characters.` };
   }
   return null;
-}
-
-// ---------------------------------------------------------------------------
-// Sign in
-// ---------------------------------------------------------------------------
-
-export interface TwoFactorChallenge {
-  method: TwoFactorMethod;
-  challengeToken: string;
-}
-
-/**
- * Step 1 of sign-in. Redirects on success; returns a challenge when the
- * account has 2FA (both outcomes are HTTP 200, so branch on `data.status`).
- */
-export async function login(input: {
-  identifier: string;
-  password: string;
-  next?: string;
-}): Promise<ActionResult<TwoFactorChallenge>> {
-  const identifier = input.identifier.trim();
-  const fieldErrors: Record<string, string> = {};
-  if (!identifier) fieldErrors.identifier = "Enter your username, email or phone number.";
-  if (!input.password) fieldErrors.password = "Enter your password.";
-  if (Object.keys(fieldErrors).length) return fail("", fieldErrors);
-
-  const result = await apiRequest<LoginResponse>("/auth/login", {
-    body: { identifier, password: input.password },
-  });
-  if (!result.ok) return fromApi(result);
-
-  if (result.data.status === "two_factor_required") {
-    if (!result.data.challenge_token || !result.data.two_factor_method) {
-      return fail("Something went wrong. Please try again.");
-    }
-    return succeed(result.message, {
-      method: result.data.two_factor_method,
-      challengeToken: result.data.challenge_token,
-    });
-  }
-  return finishLogin(result.data, input.next);
-}
-
-/** Step 2 of sign-in when the account has 2FA enabled. */
-export async function verifyTwoFactor(input: {
-  method: TwoFactorMethod;
-  challengeToken: string;
-  code: string;
-  next?: string;
-}): Promise<ActionResult> {
-  const code = input.code.trim();
-  if (input.method === "TOTP" ? !/^\d{6}$/.test(code) : !/^\d{4,10}$/.test(code)) {
-    return fail("Enter the 6-digit code.", { code: "Enter the 6-digit code." });
-  }
-
-  const path =
-    input.method === "TOTP" ? "/auth/login/verify-totp" : "/auth/login/verify-email-otp";
-  const result = await apiRequest<LoginResponse>(path, {
-    body: { challenge_token: input.challengeToken, code },
-  });
-  if (!result.ok) {
-    return {
-      ...fromApi(result),
-      challengeExpired: result.message.toLowerCase().includes("login challenge"),
-    };
-  }
-  return finishLogin(result.data, input.next);
-}
-
-/** Redirects on success, so it only ever *returns* a failure. */
-async function finishLogin(
-  data: LoginResponse,
-  next: string | undefined,
-): Promise<Extract<ActionResult, { ok: false }>> {
-  if (!data.access_token || !data.refresh_token || !data.user) {
-    return fail("Something went wrong. Please try again.");
-  }
-
-  // The web dashboard is for staff; drivers use the mobile app.
-  if (data.user.user_type === "DRIVER") {
-    await apiRequest("/auth/logout", { body: { refresh_token: data.refresh_token } });
-    return fail("This dashboard is for staff only. Drivers should use the mobile app.");
-  }
-
-  writeSessionCookies(await cookies(), data);
-  // Onboarding order: replace a temporary password, then set up 2FA, then go on.
-  if (data.has_changed_temporary_password === false) redirect(CHANGE_PASSWORD_REQUIRED_PATH);
-  if (!hasTwoFactor(data.user)) redirect(SETUP_2FA_PATH);
-  redirect(safeNextPath(next));
-}
-
-/**
- * Doesn't redirect: the caller navigates once this resolves, so the cleared
- * cookies are guaranteed to have reached the browser first (see SignOutButton).
- */
-export async function logout(): Promise<void> {
-  const store = await cookies();
-  const refreshToken = store.get(REFRESH_COOKIE)?.value;
-  if (refreshToken) {
-    // Best effort: local state is cleared even if this call fails. It only
-    // revokes the refresh token; the access token just stops being sent.
-    await apiRequest("/auth/logout", { body: { refresh_token: refreshToken } });
-  }
-  clearSessionCookies(store);
 }
 
 // ---------------------------------------------------------------------------
@@ -194,8 +78,8 @@ export async function changePassword(input: {
       : fromApi(result);
   }
 
-  // Lifts the forced-change gate in the proxy. The session itself continues.
-  (await cookies()).delete(MUST_CHANGE_COOKIE);
+  // Lifts the forced-change gate in the NextAuth token. The session itself continues.
+  await updateAuthToken((token) => ({ ...token, hasChangedTemporaryPassword: true }));
   return succeed(result.message, null);
 }
 
@@ -214,7 +98,7 @@ export async function confirmEmailOtp(input: { code: string }): Promise<ActionRe
 
   const result = await authedRequest("/auth/2fa/email/confirm", { body: { code } });
   if (!result.ok) return fromApi(result);
-  (await cookies()).delete(SETUP_2FA_COOKIE); // a second factor now exists
+  await refreshUserInAuthToken(); // a second factor now exists
   return succeed(result.message, null);
 }
 
@@ -241,6 +125,7 @@ export async function disableEmailOtp(input: { password: string }): Promise<Acti
     body: { password: input.password },
   });
   if (!result.ok) return fromApi(result);
+  await refreshUserInAuthToken();
   return succeed(result.message, null);
 }
 
@@ -255,7 +140,7 @@ export async function confirmTotp(input: { code: string }): Promise<ActionResult
 
   const result = await authedRequest("/auth/2mfa/totp/confirm", { body: { code } });
   if (!result.ok) return fromApi(result);
-  (await cookies()).delete(SETUP_2FA_COOKIE); // a second factor now exists
+  await refreshUserInAuthToken(); // a second factor now exists
   return succeed(result.message, null);
 }
 
@@ -267,5 +152,12 @@ export async function disableTotp(input: { password: string }): Promise<ActionRe
     body: { password: input.password },
   });
   if (!result.ok) return fromApi(result);
+  await refreshUserInAuthToken();
   return succeed(result.message, null);
+}
+
+async function refreshUserInAuthToken(): Promise<void> {
+  const me = await authedRequest<User>("/users/me", { method: "GET" });
+  if (!me.ok) return;
+  await updateAuthToken((token) => ({ ...token, user: me.data }));
 }
