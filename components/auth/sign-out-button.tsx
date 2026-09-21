@@ -41,7 +41,7 @@ export function SignOutButton({
       className={
         variant === "link"
           ? "font-medium text-brand hover:underline disabled:opacity-60"
-          : "flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-muted transition hover:bg-background hover:text-foreground disabled:opacity-60"
+          : "flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-muted transition hover:bg-subtle hover:text-foreground disabled:opacity-60"
       }
     >
       {pending ? "Signing out…" : children}

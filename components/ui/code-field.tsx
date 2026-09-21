@@ -48,8 +48,9 @@ export function CodeField({
           onChange(next);
           if (next.length === length) onComplete?.(next);
         }}
-        className={`h-12 w-full rounded-lg border bg-surface text-center font-mono text-2xl tracking-[0.5em] outline-none transition placeholder:text-muted/40 focus:border-brand focus:ring-2 focus:ring-brand/25 disabled:opacity-60 ${
-          error ? "border-danger" : "border-border"
+        // Letter-spacing scales with the width so six digits fit a 320px screen.
+        className={`h-14 w-full min-w-0 rounded-lg border bg-surface text-center font-mono text-2xl tracking-[0.35em] outline-none transition placeholder:text-muted/40 focus:border-brand focus:ring-3 focus:ring-brand/20 disabled:opacity-60 min-[380px]:tracking-[0.5em] ${
+          error ? "border-danger focus:border-danger focus:ring-danger/20" : "border-input"
         }`}
       />
       {error && (

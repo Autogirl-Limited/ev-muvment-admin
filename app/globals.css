@@ -1,43 +1,58 @@
 @import "tailwindcss";
 
+/*
+ * Theming: <html data-theme="light|dark"> is set before first paint by the
+ * inline script in lib/theme.ts (it resolves the saved "system" preference).
+ * Everything below reads these tokens, so components never branch on theme.
+ */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 :root {
-  --background: #f6f7f9;
-  --foreground: #14181f;
+  color-scheme: light;
+  --background: #ffffff;
+  --foreground: #000000;
   --surface: #ffffff;
-  --muted: #5d6778;
-  --border: #dde1e8;
-  --brand: #0f7b5f;
+  --subtle: #f4f4f5;
+  --muted: #5b5b63;
+  --border: #e4e4e7;
+  --input: #94949d;
+  --brand: #0b7a5a;
   --brand-foreground: #ffffff;
-  --brand-soft: #e3f4ee;
-  --danger: #b3261e;
-  --danger-soft: #fdecea;
-  --success: #1b7a43;
-  --success-soft: #e6f5ec;
+  --brand-soft: #e6f6f0;
+  --danger: #b42318;
+  --danger-soft: #fef3f2;
+  --success: #067647;
+  --success-soft: #ecfdf3;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.06), 0 8px 24px -8px rgb(0 0 0 / 0.12);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0d1014;
-    --foreground: #e8ebf0;
-    --surface: #161b22;
-    --muted: #9aa4b2;
-    --border: #2a323d;
-    --brand: #2fb98d;
-    --brand-foreground: #06251c;
-    --brand-soft: #12312a;
-    --danger: #f2877f;
-    --danger-soft: #3a1b19;
-    --success: #5fcf8b;
-    --success-soft: #14301f;
-  }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #09090b;
+  --foreground: #fafafa;
+  --surface: #111114;
+  --subtle: #1b1b20;
+  --muted: #a1a1aa;
+  --border: #26262c;
+  --input: #61616b;
+  --brand: #2fcf97;
+  --brand-foreground: #04211a;
+  --brand-soft: #0f2b23;
+  --danger: #f97066;
+  --danger-soft: #2a1211;
+  --success: #47cd89;
+  --success-soft: #0f2a1b;
+  --shadow: 0 0 0 1px rgb(255 255 255 / 0.04), 0 12px 32px -8px rgb(0 0 0 / 0.6);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-surface: var(--surface);
+  --color-subtle: var(--subtle);
   --color-muted: var(--muted);
   --color-border: var(--border);
+  --color-input: var(--input);
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
   --color-brand-soft: var(--brand-soft);
@@ -45,11 +60,54 @@
   --color-danger-soft: var(--danger-soft);
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
+  --shadow-card: var(--shadow);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --animate-fade-in: fade-in 160ms ease-out;
+  --animate-pop-in: pop-in 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-slide-in-left: slide-in-left 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+}
+@keyframes pop-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.98); }
+}
+@keyframes slide-in-left {
+  from { transform: translateX(-100%); }
+}
+
+html {
+  /* Stops iOS from inflating text in landscape while keeping user zoom. */
+  -webkit-text-size-adjust: 100%;
+  /* Smooth theme changes without animating layout. */
+  scroll-padding-top: 4.5rem;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
+  /* Never let one wide child create a horizontal scrollbar on small screens. */
+  overflow-x: clip;
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--brand) 30%, transparent);
+}
+
+dialog::backdrop {
+  animation: fade-in 160ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

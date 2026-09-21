@@ -98,6 +98,7 @@ export function ResetPasswordForm() {
         label="New password"
         name="new-password"
         autoComplete="new-password"
+        showStrength
         value={newPassword}
         onChange={(event) => setNewPassword(event.target.value)}
         error={fieldErrors.newPassword}

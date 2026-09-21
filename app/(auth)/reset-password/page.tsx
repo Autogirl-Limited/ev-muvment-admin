@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { AuthCard } from "@/components/auth/auth-card";
+import { AuthPanel } from "@/components/auth/auth-panel";
 import { ResetPasswordForm } from "@/components/auth/reset-password-form";
 
 export const metadata: Metadata = { title: "Reset password" };
 
 export default function ResetPasswordPage() {
   return (
-    <AuthCard
+    <AuthPanel
       title="Reset your password"
       description="If an account exists, we've sent a 6-digit code. It's valid for 10 minutes."
       footer={
@@ -18,6 +18,6 @@ export default function ResetPasswordPage() {
       }
     >
       <ResetPasswordForm />
-    </AuthCard>
+    </AuthPanel>
   );
 }

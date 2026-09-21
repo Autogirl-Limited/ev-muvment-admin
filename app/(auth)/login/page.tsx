@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { AuthCard } from "@/components/auth/auth-card";
+import { AuthPanel } from "@/components/auth/auth-panel";
 import { LoginForm } from "@/components/auth/login-form";
 import { safeNextPath } from "@/lib/auth/redirect";
 
@@ -18,11 +18,11 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   const next = typeof params.next === "string" ? params.next : undefined;
 
   return (
-    <AuthCard title="Sign in" description="Use your staff account to continue.">
+    <AuthPanel title="Welcome back" description="Sign in to your staff account to continue.">
       <LoginForm
         next={next ? safeNextPath(next) : undefined}
         notice={reason ? NOTICES[reason] : undefined}
       />
-    </AuthCard>
+    </AuthPanel>
   );
 }

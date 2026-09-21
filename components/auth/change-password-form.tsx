@@ -79,6 +79,7 @@ export function ChangePasswordForm({ forced = false }: { forced?: boolean }) {
         label="New password"
         name="new-password"
         autoComplete="new-password"
+        showStrength
         value={next}
         onChange={(event) => setNext(event.target.value)}
         error={fieldErrors.newPassword}

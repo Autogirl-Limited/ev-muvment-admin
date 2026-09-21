@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { AuthCard } from "@/components/auth/auth-card";
+import { AuthPanel } from "@/components/auth/auth-panel";
 import { ForgotPasswordForm } from "@/components/auth/forgot-password-form";
 
 export const metadata: Metadata = { title: "Forgot password" };
 
 export default function ForgotPasswordPage() {
   return (
-    <AuthCard
+    <AuthPanel
       title="Forgot your password?"
       description="Enter your username, email or phone number and we'll send you a reset code."
       footer={
@@ -18,6 +18,6 @@ export default function ForgotPasswordPage() {
       }
     >
       <ForgotPasswordForm />
-    </AuthCard>
+    </AuthPanel>
   );
 }
