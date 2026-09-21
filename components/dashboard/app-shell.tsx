@@ -49,6 +49,21 @@ const ICONS: Record<NavIcon, ReactNode> = {
       <path d="M8 8h8" />
     </>
   ),
+  fleet: (
+    <>
+      <path d="M5 16 6.5 10a2 2 0 0 1 1.9-1.5h7.2A2 2 0 0 1 17.5 10L19 16" />
+      <path d="M3 16h18v3a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-1H7v1a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-3Z" />
+      <circle cx="7.5" cy="13" r=".6" />
+      <circle cx="16.5" cy="13" r=".6" />
+    </>
+  ),
+  configurations: (
+    <>
+      <path d="M4 7h9M17 7h3M4 17h3M11 17h9" />
+      <circle cx="15" cy="7" r="2" />
+      <circle cx="9" cy="17" r="2" />
+    </>
+  ),
   transactions: (
     <>
       <path d="M4 7h16" />

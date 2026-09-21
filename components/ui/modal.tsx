@@ -7,10 +7,12 @@ interface ModalProps {
   onClose: () => void;
   title: string;
   children: ReactNode;
+  /** `lg` suits forms and detail views; `md` (default) suits confirmations. */
+  size?: "md" | "lg";
 }
 
 /** Thin wrapper over the native <dialog>: focus trapping and Esc come for free. */
-export function Modal({ open, onClose, title, children }: ModalProps) {
+export function Modal({ open, onClose, title, children, size = "md" }: ModalProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
 
@@ -30,7 +32,7 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
         if (event.target === ref.current) onClose();
       }}
       // Short screens (landscape phones): cap the height and scroll inside.
-      className="m-auto max-h-[calc(100dvh-1.5rem)] w-[calc(100%-1.5rem)] max-w-md overflow-y-auto overscroll-contain rounded-2xl border border-border bg-surface p-0 text-foreground shadow-card backdrop:bg-black/60 backdrop:backdrop-blur-[2px] open:animate-pop-in sm:max-h-[calc(100dvh-3rem)]"
+      className={`m-auto max-h-[calc(100dvh-1.5rem)] w-[calc(100%-1.5rem)] ${size === "lg" ? "max-w-2xl" : "max-w-md"} overflow-y-auto overscroll-contain rounded-2xl border border-border bg-surface p-0 text-foreground shadow-card backdrop:bg-black/60 backdrop:backdrop-blur-[2px] open:animate-pop-in sm:max-h-[calc(100dvh-3rem)]`}
     >
       {open && (
         <div className="space-y-4 p-5 sm:p-6">

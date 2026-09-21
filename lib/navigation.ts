@@ -1,6 +1,6 @@
 import type { UserType } from "@/lib/api/types";
 
-export type NavIcon = "dashboard" | "profile" | "security" | "applications" | "transactions";
+export type NavIcon = "dashboard" | "profile" | "security" | "applications" | "transactions" | "fleet" | "configurations";
 
 export interface NavItem {
   label: string;
@@ -18,8 +18,7 @@ export interface NavSection {
 /**
  * Sidebar navigation. Role gating here only hides links; the API is the source
  * of truth, so pages must still handle a 403 (see <AccessDenied />).
- * Admin-only entries (Users, Driver applications, Energy rates, Countries,
- * Payments) will carry `roles: ["ADMIN"]` when those pages are built.
+ * Admin-only entries (Users, Driver applications, Payments) will carry `roles: ["ADMIN"]` when those pages are built.
  */
 export const NAVIGATION: NavSection[] = [
   {
@@ -27,6 +26,13 @@ export const NAVIGATION: NavSection[] = [
       { label: "Dashboard", href: "/dashboard", icon: "dashboard" },
       { label: "Driver applications", href: "/admin/driver-applications", icon: "applications", roles: ["ADMIN"] },
       { label: "DVA transactions", href: "/dva-transactions", icon: "transactions", roles: ["ADMIN", "ACCOUNT_OFFICER", "RELATIONSHIP_OFFICER"] },
+      { label: "Fleet vehicles", href: "/fleet-vehicles", icon: "fleet", roles: ["ADMIN", "ACCOUNT_OFFICER", "RELATIONSHIP_OFFICER"] },
+    ],
+  },
+  {
+    title: "Platform",
+    items: [
+      { label: "Configurations", href: "/configurations", icon: "configurations", roles: ["ADMIN", "ACCOUNT_OFFICER", "RELATIONSHIP_OFFICER"] },
     ],
   },
   {
