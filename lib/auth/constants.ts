@@ -6,6 +6,8 @@ export const MUST_CHANGE_COOKIE = "ev_must_change";
 export const LOGIN_PATH = "/login";
 export const DASHBOARD_PATH = "/dashboard";
 export const CHANGE_PASSWORD_REQUIRED_PATH = "/change-password-required";
+/** Same-origin gateway the browser uses for data (see app/api/proxy). */
+export const API_PROXY_PREFIX = "/api/proxy/";
 
 /** Routes reachable without a session. */
 export const PUBLIC_PATHS = ["/login", "/forgot-password", "/reset-password"];

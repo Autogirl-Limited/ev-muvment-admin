@@ -10,6 +10,7 @@ import { Modal, ModalActions } from "@/components/ui/modal";
 import { PasswordField } from "@/components/ui/password-field";
 import type { TotpSetupResponse } from "@/lib/api/types";
 import type { ActionResult } from "@/lib/auth/action-result";
+import { useCurrentUser, useInvalidateCurrentUser } from "@/lib/query/user";
 import {
   confirmEmailOtp,
   confirmTotp,
@@ -19,15 +20,13 @@ import {
   setupTotp,
 } from "@/lib/auth/actions";
 
-interface SecuritySettingsProps {
-  emailOtpEnabled: boolean;
-  totpEnabled: boolean;
-  hasEmail: boolean;
-}
-
 type Dialog = "enable-email" | "disable-email" | "enable-totp" | "disable-totp" | null;
 
-export function SecuritySettings({ emailOtpEnabled, totpEnabled, hasEmail }: SecuritySettingsProps) {
+export function SecuritySettings() {
+  const user = useCurrentUser();
+  const emailOtpEnabled = user.two_factor_enabled;
+  const totpEnabled = user.totp_enabled;
+  const hasEmail = Boolean(user.email);
   const [dialog, setDialog] = useState<Dialog>(null);
   const close = () => setDialog(null);
 
@@ -152,6 +151,7 @@ function EnableEmailDialog({ open, onClose }: { open: boolean; onClose: () => vo
 }
 
 function EnableEmailBody({ onClose }: { onClose: () => void }) {
+  const refreshUser = useInvalidateCurrentUser();
   const [sent, setSent] = useState(false);
   const [code, setCode] = useState("");
   const { error, fieldErrors, pending, run } = useSubmit();
@@ -175,7 +175,11 @@ function EnableEmailBody({ onClose }: { onClose: () => void }) {
     );
   }
 
-  const confirm = (value: string) => run(() => confirmEmailOtp({ code: value }), onClose);
+  const confirm = (value: string) =>
+    run(() => confirmEmailOtp({ code: value }), () => {
+      refreshUser();
+      onClose();
+    });
 
   return (
     <>
@@ -211,6 +215,7 @@ function EnableTotpDialog({ open, onClose }: { open: boolean; onClose: () => voi
 }
 
 function EnableTotpBody({ onClose }: { onClose: () => void }) {
+  const refreshUser = useInvalidateCurrentUser();
   const [setup, setSetup] = useState<TotpSetupResponse | null>(null);
   const [code, setCode] = useState("");
   const [copied, setCopied] = useState(false);
@@ -235,7 +240,11 @@ function EnableTotpBody({ onClose }: { onClose: () => void }) {
     );
   }
 
-  const confirm = (value: string) => run(() => confirmTotp({ code: value }), onClose);
+  const confirm = (value: string) =>
+    run(() => confirmTotp({ code: value }), () => {
+      refreshUser();
+      onClose();
+    });
 
   return (
     <>
@@ -307,6 +316,7 @@ function DisableBody({
   onClose: () => void;
   submit: (password: string) => Promise<ActionResult>;
 }) {
+  const refreshUser = useInvalidateCurrentUser();
   const [password, setPassword] = useState("");
   const { error, fieldErrors, pending, run } = useSubmit();
 
@@ -316,7 +326,10 @@ function DisableBody({
       noValidate
       onSubmit={(event) => {
         event.preventDefault();
-        run(() => submit(password), onClose);
+        run(() => submit(password), () => {
+          refreshUser();
+          onClose();
+        });
       }}
     >
       <p className="text-sm text-muted">

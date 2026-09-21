@@ -7,12 +7,18 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { Logo } from "@/components/brand/logo";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
-import type { NavIcon, NavSection } from "@/lib/navigation";
+import { ROLE_LABELS, type NavIcon, type NavSection } from "@/lib/navigation";
+import { useCurrentUser } from "@/lib/query/user";
 
 interface AppShellProps {
   sections: NavSection[];
-  user: { name: string; email: string | null; roleLabel: string };
   children: ReactNode;
+}
+
+interface UserSummary {
+  name: string;
+  email: string | null;
+  roleLabel: string;
 }
 
 const ICONS: Record<NavIcon, ReactNode> = {
@@ -137,7 +143,13 @@ function Drawer({
   );
 }
 
-function UserMenu({ user }: { user: AppShellProps["user"] }) {
+function UserMenu() {
+  const current = useCurrentUser();
+  const user: UserSummary = {
+    name: `${current.first_name} ${current.last_name}`.trim() || current.username,
+    email: current.email,
+    roleLabel: ROLE_LABELS[current.user_type],
+  };
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -200,7 +212,7 @@ function UserMenu({ user }: { user: AppShellProps["user"] }) {
   );
 }
 
-export function AppShell({ sections, user, children }: AppShellProps) {
+export function AppShell({ sections, children }: AppShellProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const closeDrawer = () => setDrawerOpen(false);
 
@@ -247,7 +259,7 @@ export function AppShell({ sections, user, children }: AppShellProps) {
 
           <div className="flex items-center gap-2 sm:gap-3">
             <ThemeToggle />
-            <UserMenu user={user} />
+            <UserMenu />
           </div>
         </header>
 

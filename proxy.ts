@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import {
   ACCESS_COOKIE,
+  API_PROXY_PREFIX,
   CHANGE_PASSWORD_REQUIRED_PATH,
   DASHBOARD_PATH,
   LOGIN_PATH,
@@ -67,6 +68,26 @@ export async function proxy(request: NextRequest) {
     return respond(NextResponse.redirect(url));
   };
 
+  // Data calls from the browser (TanStack Query) get JSON errors, never redirects.
+  if (pathname.startsWith(API_PROXY_PREFIX)) {
+    if (!signedIn) return respond(apiError(401, "Not signed in", "UNAUTHORIZED"));
+    if (mustChange) {
+      return respond(apiError(403, "You must set a new password first", "FORBIDDEN"));
+    }
+    if (refreshed) {
+      // The route handler reads the access cookie, so hand it the fresh one.
+      writeSessionCookies(
+        {
+          set: (name, value) => request.cookies.set(name, value),
+          delete: (name) => request.cookies.delete(name),
+        },
+        refreshed,
+      );
+      return respond(NextResponse.next({ request: { headers: request.headers } }));
+    }
+    return NextResponse.next();
+  }
+
   if (!signedIn) {
     // Redirecting a Server Action POST makes the client replay it against
     // /login, which lands on an error page. Let it through instead: with no
@@ -106,7 +127,15 @@ export async function proxy(request: NextRequest) {
   return NextResponse.next();
 }
 
+function apiError(status: number, message: string, code: string) {
+  return NextResponse.json(
+    { status: "error", message, data: null, error: { code, details: null } },
+    { status, headers: { "Cache-Control": "no-store" } },
+  );
+}
+
 export const config = {
-  // Skip API routes, Next internals and static files (anything with an extension).
-  matcher: ["/((?!api|_next/static|_next/image|.*\\..*).*)"],
+  // Skip Next internals, static files (anything with an extension) and API
+  // routes, except the data gateway (/api/proxy), which needs token refresh.
+  matcher: ["/((?!api(?!/proxy)|_next/static|_next/image|.*\\..*).*)"],
 };

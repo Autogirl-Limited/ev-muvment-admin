@@ -2,7 +2,6 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
 
 import { apiRequest, type ApiFailure } from "@/lib/api/client";
 import type { LoginResponse, TotpSetupResponse, TwoFactorMethod } from "@/lib/api/types";
@@ -195,36 +194,6 @@ export async function changePassword(input: {
 }
 
 // ---------------------------------------------------------------------------
-// Profile
-// ---------------------------------------------------------------------------
-
-export async function updateProfile(input: {
-  firstName: string;
-  lastName: string;
-}): Promise<ActionResult> {
-  const firstName = input.firstName.trim();
-  const lastName = input.lastName.trim();
-  const fieldErrors: Record<string, string> = {
-    ...((firstName.length < 1 || firstName.length > 100) && {
-      firstName: "First name must be 1–100 characters.",
-    }),
-    ...((lastName.length < 1 || lastName.length > 100) && {
-      lastName: "Last name must be 1–100 characters.",
-    }),
-  };
-  if (Object.keys(fieldErrors).length) return fail("", fieldErrors);
-
-  const result = await authedRequest("/users/me", {
-    method: "PATCH",
-    body: { first_name: firstName, last_name: lastName },
-  });
-  if (!result.ok) return fromApi(result);
-
-  revalidatePath("/", "layout");
-  return succeed("Profile updated.", null);
-}
-
-// ---------------------------------------------------------------------------
 // Two-factor management
 // ---------------------------------------------------------------------------
 
@@ -239,7 +208,6 @@ export async function confirmEmailOtp(input: { code: string }): Promise<ActionRe
 
   const result = await authedRequest("/auth/2fa/email/confirm", { body: { code } });
   if (!result.ok) return fromApi(result);
-  revalidatePath("/", "layout");
   return succeed(result.message, null);
 }
 
@@ -249,7 +217,6 @@ export async function disableEmailOtp(input: { password: string }): Promise<Acti
     body: { password: input.password },
   });
   if (!result.ok) return fromApi(result);
-  revalidatePath("/", "layout");
   return succeed(result.message, null);
 }
 
@@ -264,7 +231,6 @@ export async function confirmTotp(input: { code: string }): Promise<ActionResult
 
   const result = await authedRequest("/auth/2mfa/totp/confirm", { body: { code } });
   if (!result.ok) return fromApi(result);
-  revalidatePath("/", "layout");
   return succeed(result.message, null);
 }
 
@@ -274,6 +240,5 @@ export async function disableTotp(input: { password: string }): Promise<ActionRe
     body: { password: input.password },
   });
   if (!result.ok) return fromApi(result);
-  revalidatePath("/", "layout");
   return succeed(result.message, null);
 }

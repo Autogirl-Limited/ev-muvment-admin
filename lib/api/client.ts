@@ -1,6 +1,14 @@
 import "server-only";
 
+import {
+  NETWORK_ERROR_MESSAGE,
+  failure,
+  toResult,
+  type ApiResult,
+} from "./envelope";
 import type { ApiEnvelope } from "./types";
+
+export type { ApiFailure, ApiResult, ApiSuccess } from "./envelope";
 
 const DEFAULT_DEV_API_BASE_URL = "http://localhost:8000";
 
@@ -14,34 +22,29 @@ function apiBaseUrl(): string {
   return `${base.replace(/\/+$/, "")}/api/v1`;
 }
 
-export interface ApiSuccess<T> {
-  ok: true;
-  status: number;
-  message: string;
-  data: T;
-}
-
-export interface ApiFailure {
-  ok: false;
-  /** HTTP status, or 0 when the API could not be reached. */
-  status: number;
-  message: string;
-  code: string | null;
-  /** Field-level messages from a 422, keyed by field name. */
-  fieldErrors: Record<string, string>;
-}
-
-export type ApiResult<T> = ApiSuccess<T> | ApiFailure;
-
-const NETWORK_ERROR_MESSAGE =
-  "We couldn't reach the server. Check your connection and try again.";
-const GENERIC_ERROR_MESSAGE = "Something went wrong. Please try again.";
+type Method = "GET" | "POST" | "PATCH" | "DELETE";
 
 interface RequestOptions {
-  method?: "GET" | "POST" | "PATCH" | "DELETE";
+  method?: Method;
+  /** Already-serialised JSON body. */
+  rawBody?: string;
   body?: unknown;
   /** Access token to send as a Bearer credential. */
   token?: string;
+}
+
+async function send(path: string, { method = "POST", body, rawBody, token }: RequestOptions) {
+  const payload = rawBody ?? (body !== undefined ? JSON.stringify(body) : undefined);
+  return fetch(`${apiBaseUrl()}${path}`, {
+    method,
+    cache: "no-store",
+    headers: {
+      Accept: "application/json",
+      ...(payload !== undefined ? { "Content-Type": "application/json" } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: payload,
+  });
 }
 
 /**
@@ -50,20 +53,11 @@ interface RequestOptions {
  */
 export async function apiRequest<T = null>(
   path: string,
-  { method = "POST", body, token }: RequestOptions = {},
+  options: RequestOptions = {},
 ): Promise<ApiResult<T>> {
   let res: Response;
   try {
-    res = await fetch(`${apiBaseUrl()}${path}`, {
-      method,
-      cache: "no-store",
-      headers: {
-        Accept: "application/json",
-        ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
+    res = await send(path, options);
   } catch {
     return failure(0, NETWORK_ERROR_MESSAGE);
   }
@@ -74,36 +68,30 @@ export async function apiRequest<T = null>(
   } catch {
     // Non-JSON body, e.g. an HTML error page from a gateway.
   }
-
-  if (res.ok && envelope?.status === "success") {
-    return {
-      ok: true,
-      status: res.status,
-      message: envelope.message,
-      data: envelope.data as T,
-    };
-  }
-
-  const fieldErrors: Record<string, string> = {};
-  for (const detail of envelope?.error?.details ?? []) {
-    // Pydantic locations can arrive prefixed ("body.identifier").
-    const field = detail.field.split(".").pop() ?? detail.field;
-    fieldErrors[field] ??= detail.issue;
-  }
-
-  // Server-side faults carry internal wording; keep the UI message generic.
-  const message =
-    res.status >= 500 || !envelope?.message ? GENERIC_ERROR_MESSAGE : envelope.message;
-
-  return {
-    ok: false,
-    status: res.status,
-    message,
-    code: envelope?.error?.code ?? null,
-    fieldErrors,
-  };
+  return toResult(res.status, res.ok, envelope);
 }
 
-function failure(status: number, message: string): ApiFailure {
-  return { ok: false, status, message, code: null, fieldErrors: {} };
+/**
+ * Forwards a request untouched and returns the raw status and body. Used by
+ * the browser-facing BFF route (app/api/proxy), which passes the API's own
+ * envelope through so the browser fetcher can interpret it.
+ */
+export async function forwardToApi(
+  path: string,
+  options: RequestOptions,
+): Promise<{ status: number; body: string }> {
+  try {
+    const res = await send(path, options);
+    return { status: res.status, body: await res.text() };
+  } catch {
+    return {
+      status: 502,
+      body: JSON.stringify({
+        status: "error",
+        message: NETWORK_ERROR_MESSAGE,
+        data: null,
+        error: { code: "BAD_GATEWAY", details: null },
+      }),
+    };
+  }
 }
