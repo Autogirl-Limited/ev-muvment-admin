@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { SignOutButton } from "@/components/auth/sign-out-button";
-import { Logo } from "@/components/brand/logo";
+import { Logo, LogoMark } from "@/components/brand/logo";
 import { NotificationBell } from "@/components/notifications/notification-bell";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { ROLE_LABELS, type NavIcon, type NavSection } from "@/lib/navigation";
@@ -14,7 +14,11 @@ import { useCurrentUser } from "@/lib/query/user";
 interface AppShellProps {
   sections: NavSection[];
   children: ReactNode;
+  /** Read from a cookie on the server, so the first paint already has the right width. */
+  defaultCollapsed?: boolean;
 }
+
+const SIDEBAR_COOKIE = "ev-sidebar";
 
 interface UserSummary {
   name: string;
@@ -127,18 +131,47 @@ function Icon({ name, className = "size-5" }: { name: NavIcon; className?: strin
   );
 }
 
-function Navigation({ sections, onNavigate }: { sections: NavSection[]; onNavigate?: () => void }) {
+interface Tip {
+  label: string;
+  top: number;
+  left: number;
+}
+
+function Navigation({ sections, onNavigate, collapsed = false }: { sections: NavSection[]; onNavigate?: () => void; collapsed?: boolean }) {
   const pathname = usePathname();
+  const [tip, setTip] = useState<Tip | null>(null);
+
+  // A native `title` would be clipped by this scrolling list, so the rail draws its own tooltip.
+  const showTip = (label: string, element: HTMLElement) => {
+    if (!collapsed) return;
+    const rect = element.getBoundingClientRect();
+    setTip({ label, top: rect.top + rect.height / 2, left: rect.right + 10 });
+  };
+  const hideTip = () => setTip(null);
 
   return (
-    <nav aria-label="Main" className="flex-1 space-y-6 overflow-y-auto overscroll-contain px-3 py-4">
+    <nav
+      aria-label="Main"
+      onScroll={hideTip}
+      className={`flex-1 overflow-y-auto overscroll-contain py-4 ${collapsed ? "space-y-3 px-2" : "space-y-6 px-3"}`}
+    >
+      {tip && collapsed && (
+        <span
+          role="tooltip"
+          style={{ top: tip.top, left: tip.left }}
+          className="pointer-events-none fixed z-50 -translate-y-1/2 whitespace-nowrap rounded-md bg-foreground px-2.5 py-1.5 text-xs font-medium text-background shadow-card"
+        >
+          {tip.label}
+        </span>
+      )}
       {sections.map((section, index) => (
         <div key={section.title ?? index}>
-          {section.title && (
+          {section.title && !collapsed && (
             <p className="mb-1.5 px-3 text-xs font-medium uppercase tracking-wider text-muted">
               {section.title}
             </p>
           )}
+          {collapsed && index > 0 && <div aria-hidden className="mx-2 mb-3 border-t border-border" />}
           <ul className="space-y-0.5">
             {section.items.map((item) => {
               const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -148,14 +181,20 @@ function Navigation({ sections, onNavigate }: { sections: NavSection[]; onNaviga
                     href={item.href}
                     onClick={onNavigate}
                     aria-current={active ? "page" : undefined}
-                    className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition pointer-coarse:py-3 pointer-coarse:text-base ${
+                    onPointerEnter={(event) => showTip(item.label, event.currentTarget)}
+                    onPointerLeave={hideTip}
+                    onFocus={(event) => showTip(item.label, event.currentTarget)}
+                    onBlur={hideTip}
+                    className={`flex items-center rounded-lg text-sm font-medium transition pointer-coarse:text-base ${
+                      collapsed ? "mx-auto size-11 justify-center" : "gap-3 px-3 py-2 pointer-coarse:py-3"
+                    } ${
                       active
                         ? "bg-brand-soft text-brand"
                         : "text-muted hover:bg-subtle hover:text-foreground"
                     }`}
                   >
                     <Icon name={item.icon} />
-                    {item.label}
+                    {collapsed ? <span className="sr-only">{item.label}</span> : item.label}
                   </Link>
                 </li>
               );
@@ -278,9 +317,17 @@ function UserMenu() {
   );
 }
 
-export function AppShell({ sections, children }: AppShellProps) {
+export function AppShell({ sections, children, defaultCollapsed = false }: AppShellProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const closeDrawer = () => setDrawerOpen(false);
+
+  const toggleSidebar = () => {
+    const next = !collapsed;
+    setCollapsed(next);
+    // A cookie (not localStorage) so the server can render the saved width on the next load.
+    document.cookie = `${SIDEBAR_COOKIE}=${next ? "collapsed" : "expanded"}; path=/; max-age=31536000; samesite=lax`;
+  };
 
   const brand = (
     <div className="flex h-14 shrink-0 items-center border-b border-border px-5">
@@ -298,9 +345,31 @@ export function AppShell({ sections, children }: AppShellProps) {
       </a>
 
       {/* Desktop sidebar */}
-      <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-r border-border bg-surface lg:flex">
-        {brand}
-        <Navigation sections={sections} />
+      {/* Sits above the sticky header (z-30) so the toggle can straddle their corner. */}
+      <aside
+        className={`sticky top-0 z-40 hidden h-dvh shrink-0 flex-col border-r border-border bg-surface transition-[width] duration-200 ease-out motion-reduce:transition-none lg:flex ${
+          collapsed ? "w-[4.5rem]" : "w-64"
+        }`}
+      >
+        {collapsed ? (
+          <div className="flex h-14 shrink-0 items-center justify-center border-b border-border">
+            <LogoMark />
+          </div>
+        ) : (
+          brand
+        )}
+        <Navigation sections={sections} collapsed={collapsed} />
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-expanded={!collapsed}
+          className="absolute -right-3 top-14 z-10 flex size-6 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-surface text-muted shadow-card transition hover:border-brand hover:text-brand focus-visible:outline-2 focus-visible:outline-brand after:absolute after:-inset-2"
+        >
+          <svg viewBox="0 0 24 24" className={`size-3.5 transition-transform duration-200 ${collapsed ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="m15 18-6-6 6-6" />
+          </svg>
+        </button>
       </aside>
 
       {/* Mobile / tablet drawer */}

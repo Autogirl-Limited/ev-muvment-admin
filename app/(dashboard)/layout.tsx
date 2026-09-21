@@ -1,4 +1,5 @@
 import { HydrationBoundary, dehydrate } from "@tanstack/react-query";
+import { cookies } from "next/headers";
 
 import { AuthSync } from "@/components/auth/auth-sync";
 import { AppShell } from "@/components/dashboard/app-shell";
@@ -20,13 +21,16 @@ export default async function DashboardLayout({ children }: LayoutProps<"/">) {
   const queryClient = getQueryClient();
   queryClient.setQueryData(queryKeys.me, user);
 
+  // The sidebar toggle stores its state in a cookie, so the first paint already matches.
+  const sidebarCollapsed = (await cookies()).get("ev-sidebar")?.value === "collapsed";
+
   return (
     <QueryProvider>
       <HydrationBoundary state={dehydrate(queryClient)}>
         <AuthSync />
         <ToastProvider>
           <RealtimeProvider>
-            <AppShell sections={navigationFor(user.user_type)}>{children}</AppShell>
+            <AppShell sections={navigationFor(user.user_type)} defaultCollapsed={sidebarCollapsed}>{children}</AppShell>
           </RealtimeProvider>
         </ToastProvider>
       </HydrationBoundary>
