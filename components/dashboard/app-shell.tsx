@@ -81,6 +81,19 @@ const ICONS: Record<NavIcon, ReactNode> = {
       <circle cx="16.5" cy="13.5" r=".7" />
     </>
   ),
+  drivers: (
+    <>
+      <circle cx="9" cy="8" r="3.5" />
+      <path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.4c2 .7 3.5 2.6 3.5 5.6" />
+    </>
+  ),
+  staff: (
+    <>
+      <rect x="4" y="3" width="16" height="18" rx="2" />
+      <circle cx="12" cy="10" r="2.5" />
+      <path d="M8 17c.5-2 2-3 4-3s3.5 1 4 3" />
+    </>
+  ),
   notifications: (
     <>
       <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />

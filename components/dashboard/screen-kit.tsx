@@ -99,6 +99,51 @@ const PATHS = {
     </>
   ),
   checkAll: <path d="M2 12.5 6.5 17 15 7.5M11 16l1 1 9-10" />,
+  copy: (
+    <>
+      <rect x="9" y="9" width="11" height="11" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </>
+  ),
+  wallet: (
+    <>
+      <path d="M4 7.5h14a2 2 0 0 1 2 2V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7.5a2 2 0 0 1 2-2h11" />
+      <path d="M16 11h5v5h-5a2.5 2.5 0 0 1 0-5Z" />
+    </>
+  ),
+  bank: <path d="m3 10 9-6 9 6M5 10v8M9 10v8M15 10v8M19 10v8M3 21h18" />,
+  shield: (
+    <>
+      <path d="M12 3 4 6v6c0 4.5 3.2 8 8 9 4.8-1 8-4.5 8-9V6l-8-3Z" />
+      <path d="m9 12 2 2 4-4" />
+    </>
+  ),
+  mail: (
+    <>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="m3 7 9 6 9-6" />
+    </>
+  ),
+  phone: <path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2Z" />,
+  key: (
+    <>
+      <circle cx="8" cy="15" r="4" />
+      <path d="m11 12 9-9M16 7l3 3" />
+    </>
+  ),
+  userPlus: (
+    <>
+      <circle cx="10" cy="8" r="4" />
+      <path d="M2 21c0-4 3.6-7 8-7 1 0 2 .2 2.9.5M18 14v6M15 17h6" />
+    </>
+  ),
+  idCard: (
+    <>
+      <rect x="4" y="3" width="16" height="18" rx="2" />
+      <circle cx="12" cy="10" r="2.5" />
+      <path d="M8 17c.5-2 2-3 4-3s3.5 1 4 3" />
+    </>
+  ),
   external: <path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />,
   arrowUp: <path d="M12 19V5m-6 6 6-6 6 6" />,
   arrowDown: <path d="M12 5v14m-6-6 6 6 6-6" />,

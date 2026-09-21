@@ -83,6 +83,10 @@ export const queryKeys = {
     drivers: (searchTerm: string) => ["users", "drivers", searchTerm] as const,
     assignableDrivers: (searchTerm: string) => ["users", "assignable-drivers", searchTerm] as const,
     detail: (id: string) => ["users", "detail", id] as const,
+    /** Every user of one role, loaded in full (the people screens filter locally). */
+    roster: (userType: string) => ["users", "roster", userType] as const,
+    usernameCheck: (username: string) => ["users", "username-check", username] as const,
+    usernameSuggestions: (first: string, last: string) => ["users", "username-suggestions", first, last] as const,
     search: (searchTerm: string) => ["users", "search", searchTerm] as const,
   },
 };

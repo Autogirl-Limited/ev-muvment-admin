@@ -9,6 +9,8 @@ export type NavIcon =
   | "wallet"
   | "checklists"
   | "notifications"
+  | "drivers"
+  | "staff"
   | "fleet"
   | "configurations";
 
@@ -64,6 +66,14 @@ export const NAVIGATION: NavSection[] = [
         icon: "applications",
         roles: ["ADMIN"],
       },
+    ],
+  },
+  {
+    // The users endpoints are admin-only, so these pages are too.
+    title: "People",
+    items: [
+      { label: "Drivers", href: "/drivers", icon: "drivers", roles: ["ADMIN"] },
+      { label: "Staff", href: "/staff", icon: "staff", roles: ["ADMIN"] },
     ],
   },
   {

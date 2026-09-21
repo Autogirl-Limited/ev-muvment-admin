@@ -48,6 +48,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       switch (event) {
         case "dva_transaction.created": {
           const tx = data as DvaTransaction;
+          queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
           if (!seenDvaIds.current.has(tx.id)) {
             seenDvaIds.current.add(tx.id);
             toast.info(`${naira(tx.amount)} received${tx.payer_name ? ` from ${tx.payer_name}` : ""}.`);
@@ -65,6 +66,8 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
           }
           queryClient.setQueryData(queryKeys.dailyChecklists.detail(checklist.id), checklist);
           queryClient.invalidateQueries({ queryKey: queryKeys.dailyChecklists.all });
+          // A submitted checklist flips the driver's shift status.
+          queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
           break;
         }
         case "checklist_settings.updated":
@@ -77,6 +80,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
         case "vehicle.unassigned":
         case "vehicle.updated":
           queryClient.invalidateQueries({ queryKey: queryKeys.vehicles.all });
+          queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
           queryClient.invalidateQueries({ queryKey: queryKeys.me });
           break;
         case "wallet_allocation.created":

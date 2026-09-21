@@ -485,7 +485,7 @@ export function VehicleDetails({ id, isAdmin, onClose, onEdit, onAssign, onUnass
                 <p className="text-xs font-medium uppercase text-muted">Checklist schedule</p>
                 <p className="mt-1 text-sm text-muted">Custom rows override the global pick-up or drop-off defaults for this vehicle.</p>
               </div>
-              <Button variant="secondary" onClick={() => setEditingSchedule(true)}>Edit schedule</Button>
+              <Button variant="secondary" className="py-3" onClick={() => setEditingSchedule(true)}>Edit schedule</Button>
             </div>
             {settings.isLoading ? (
               <div className="mt-3 h-24 animate-pulse rounded-lg bg-subtle" />

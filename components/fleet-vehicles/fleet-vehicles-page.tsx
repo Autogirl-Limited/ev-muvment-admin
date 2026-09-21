@@ -7,6 +7,7 @@ import { AccessDenied } from "@/components/dashboard/access-denied";
 import { ConfigPageHeader, EmptyState, ErrorState, Icon, IconButton, SearchInput, SkeletonRows } from "@/components/dashboard/screen-kit";
 import { AssignDriverDialog, DeleteVehicleDialog, PlateChip, ReassignDialog, UnassignDialog, VehicleDetails } from "@/components/fleet-vehicles/vehicle-dialogs";
 import { VehicleForm } from "@/components/fleet-vehicles/vehicle-form";
+import { DriverLink } from "@/components/people/people-parts";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -41,7 +42,7 @@ function DriverCell({ vehicle }: { vehicle: Vehicle }) {
   if (!vehicle.driver) return <Badge tone="success" dot>Available</Badge>;
   return (
     <div className="min-w-0">
-      <p className="truncate text-sm font-medium">{fullName(vehicle.driver)}</p>
+      <p className="truncate text-sm font-medium"><DriverLink id={vehicle.driver.id}>{fullName(vehicle.driver)}</DriverLink></p>
       <p className="truncate text-xs text-muted">
         {vehicle.driver.phone_number ?? `@${vehicle.driver.username}`}
         {vehicle.assigned_at ? ` · since ${formatDate(vehicle.assigned_at)}` : ""}

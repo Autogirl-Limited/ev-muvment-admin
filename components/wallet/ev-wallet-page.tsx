@@ -7,6 +7,7 @@ import { ConfigPageHeader, EmptyState, ErrorState, SearchInput, SkeletonRows } f
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DriverLink } from "@/components/people/people-parts";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Modal, ModalActions } from "@/components/ui/modal";
@@ -271,7 +272,7 @@ function AllocationQueue({
               <div key={allocation.id} className="p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold">{driver ? driverLabel(driver) : `Driver ${shortId(allocation.user_id)}`}</p>
+                    <p className="truncate text-sm font-semibold"><DriverLink id={allocation.user_id}>{driver ? driverLabel(driver) : `Driver ${shortId(allocation.user_id)}`}</DriverLink></p>
                     <p className="mt-1 text-xs text-muted">{allocation.paid_at ? `Paid ${formatDateTime(allocation.paid_at)}` : `Created ${formatDateTime(allocation.created_at)}`}</p>
                   </div>
                   {amountCell(allocation.amount)}
@@ -364,7 +365,7 @@ function Ledger({
                 return (
                   <tr key={allocation.id} onClick={() => onOpen(allocation.id)} className="cursor-pointer transition hover:bg-subtle/70">
                     <td className="px-4 py-3">
-                      <p className="font-medium">{found ? driverLabel(found) : `Driver ${shortId(allocation.user_id)}`}</p>
+                      <p className="font-medium"><DriverLink id={allocation.user_id}>{found ? driverLabel(found) : `Driver ${shortId(allocation.user_id)}`}</DriverLink></p>
                       <p className="mt-0.5 text-xs text-muted">{shortId(allocation.id)}</p>
                     </td>
                     <td className="px-4 py-3">{TYPE_LABELS[allocation.type]}</td>
@@ -426,11 +427,13 @@ function DriverPickerModal({ open, onClose, onPick }: { open: boolean; onClose: 
   );
 }
 
-function FreeGrantDialog({ open, onClose, onChanged }: { open: boolean; onClose: () => void; onChanged: () => void }) {
+/** Records a free grant. Pass `presetDriver` (e.g. from a driver page) to skip the driver search. */
+export function FreeGrantDialog({ open, onClose, onChanged, presetDriver }: { open: boolean; onClose: () => void; onChanged: () => void; presetDriver?: DriverOption }) {
   const queryClient = useQueryClient();
   const toast = useToast();
   const [search, setSearch] = useState("");
-  const [driver, setDriver] = useState<DriverOption | null>(null);
+  const [picked, setPicked] = useState<DriverOption | null>(null);
+  const driver = presetDriver ?? picked;
   const [amount, setAmount] = useState("");
   const [notes, setNotes] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -441,7 +444,7 @@ function FreeGrantDialog({ open, onClose, onChanged }: { open: boolean; onClose:
   const driversQuery = useQuery({
     queryKey: queryKeys.users.assignableDrivers(debounced),
     queryFn: ({ signal }) => listDriverOptions(debounced, signal),
-    enabled: open,
+    enabled: open && !presetDriver,
   });
 
   const previewQuery = useQuery({
@@ -459,7 +462,7 @@ function FreeGrantDialog({ open, onClose, onChanged }: { open: boolean; onClose:
       onChanged();
       setConfirmOpen(false);
       onClose();
-      setDriver(null);
+      setPicked(null);
       setAmount("");
       setNotes("");
       setError(null);
@@ -474,6 +477,16 @@ function FreeGrantDialog({ open, onClose, onChanged }: { open: boolean; onClose:
       <Modal open={open && !confirmOpen} onClose={grantMutation.isPending ? () => {} : onClose} title="Record free grant" size="lg">
         <div className="space-y-4">
           <Alert>Free grants credit a driver wallet immediately and cannot be reversed from this screen.</Alert>
+          {presetDriver ? (
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-subtle/50 px-4 py-3">
+              <span>
+                <span className="block font-medium">{driverLabel(presetDriver)}</span>
+                <span className="block text-sm text-muted">{presetDriver.vehicle ? presetDriver.vehicle.name : "No vehicle assigned"}</span>
+              </span>
+              {!presetDriver.vehicle && <Badge tone="danger">No vehicle</Badge>}
+            </div>
+          ) : (
+            <>
           <SearchInput value={search} onChange={setSearch} placeholder="Search driver" />
           <div className="max-h-48 overflow-y-auto rounded-lg border border-border">
             {driversQuery.isLoading ? (
@@ -481,7 +494,7 @@ function FreeGrantDialog({ open, onClose, onChanged }: { open: boolean; onClose:
             ) : driversQuery.data?.items.length ? (
               <div className="divide-y divide-border">
                 {driversQuery.data.items.map((item) => (
-                  <button key={item.id} type="button" onClick={() => setDriver(item)} className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-subtle ${driver?.id === item.id ? "bg-brand-soft" : ""}`}>
+                  <button key={item.id} type="button" onClick={() => setPicked(item)} className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-subtle ${driver?.id === item.id ? "bg-brand-soft" : ""}`}>
                     <span>
                       <span className="block font-medium">{driverLabel(item)}</span>
                       <span className="block text-sm text-muted">{item.vehicle ? item.vehicle.name : "No vehicle assigned"}</span>
@@ -494,6 +507,8 @@ function FreeGrantDialog({ open, onClose, onChanged }: { open: boolean; onClose:
               <EmptyState icon="search" title="No drivers found" />
             )}
           </div>
+            </>
+          )}
           <div className="grid gap-3 md:grid-cols-2">
             <label className="text-sm font-medium">
               Amount

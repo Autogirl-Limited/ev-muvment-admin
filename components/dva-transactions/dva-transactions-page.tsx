@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 
 import { AccessDenied } from "@/components/dashboard/access-denied";
 import { Button } from "@/components/ui/button";
+import { DriverLink } from "@/components/people/people-parts";
 import { DateRangePicker, lagosToday } from "@/components/ui/date-range-picker";
 import { Modal, ModalActions } from "@/components/ui/modal";
 import { ApiError } from "@/lib/api/browser";
@@ -483,7 +484,7 @@ export function DvaTransactionsPage() {
                       <p>{dash(tx.payer_name)}</p>
                       <p className="text-xs text-muted" title={tx.payer_bank_code ?? undefined}>{dash(tx.payer_account_number)} · {dash(payerBank(tx))}</p>
                     </td>
-                    <td className="px-4 py-3">{driverNames.get(tx.user_id) ?? shortId(tx.user_id)}</td>
+                    <td className="px-4 py-3"><DriverLink id={tx.user_id}>{driverNames.get(tx.user_id) ?? shortId(tx.user_id)}</DriverLink></td>
                     <td className="max-w-56 truncate px-4 py-3 font-mono text-xs">{tx.transaction_reference}</td>
                     <td className="max-w-48 truncate px-4 py-3">{dash(tx.narration)}</td>
                   </tr>

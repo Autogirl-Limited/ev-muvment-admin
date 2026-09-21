@@ -616,7 +616,7 @@ export function DriverApplicationsPage() {
                     loading={resend.isPending}
                     onSend={(channel) => resend.mutate({ userId: selected.user_id!, channel })}
                   />
-                  <a className="inline-flex h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-medium hover:bg-subtle" href={`/users/${selected.user_id}`}>View driver profile</a>
+                  <a className="inline-flex h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-medium hover:bg-subtle" href={`/drivers/${selected.user_id}`}>View driver profile</a>
                   <a className="inline-flex h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-medium hover:bg-subtle" href={`/dva-transactions?userId=${selected.user_id}`}>View transactions</a>
                 </>
               )}
@@ -675,7 +675,7 @@ export function DriverApplicationsPage() {
                     loading={resend.isPending}
                     onSend={(channel) => resend.mutate({ userId: approvedApp.user_id!, channel })}
                   />
-                  <a className="inline-flex h-10 items-center rounded-lg bg-brand px-4 text-sm font-medium text-brand-foreground hover:brightness-110" href={`/users/${approvedApp.user_id}`}>View profile</a>
+                  <a className="inline-flex h-10 items-center rounded-lg bg-brand px-4 text-sm font-medium text-brand-foreground hover:brightness-110" href={`/drivers/${approvedApp.user_id}`}>View profile</a>
                 </>
               )}
             </div>

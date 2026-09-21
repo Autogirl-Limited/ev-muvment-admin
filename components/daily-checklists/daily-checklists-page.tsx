@@ -7,6 +7,7 @@ import { AccessDenied } from "@/components/dashboard/access-denied";
 import { ConfigPageHeader, EmptyState, ErrorState, SearchInput } from "@/components/dashboard/screen-kit";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { DriverLink } from "@/components/people/people-parts";
 import { Button } from "@/components/ui/button";
 import { DateRangePicker, dateLabel, lagosToday } from "@/components/ui/date-range-picker";
 import { Modal, ModalActions } from "@/components/ui/modal";
@@ -30,6 +31,7 @@ import { useSearchState, useUrlState } from "@/lib/hooks/use-url-state";
 import { CACHE } from "@/lib/query/cache";
 import { queryKeys } from "@/lib/query/keys";
 import { useCurrentUser } from "@/lib/query/user";
+import { useManagedUser } from "@/lib/query/users";
 
 const PAGE_SIZE = 20;
 const ROW_GRID = "md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_8rem_8rem_9rem_8rem]";
@@ -75,7 +77,7 @@ function readingValue(value: unknown) {
 function DriverVehicleCell({ checklist }: { checklist: ChecklistResponse }) {
   return (
     <div className="min-w-0">
-      <p className="truncate text-sm font-medium">{fullName(checklist.driver)}</p>
+      <p className="truncate text-sm font-medium"><DriverLink id={checklist.driver.id}>{fullName(checklist.driver)}</DriverLink></p>
       <p className="truncate text-xs text-muted">@{checklist.driver.username}</p>
       <p className="mt-1 truncate text-xs text-muted">{checklist.vehicle.name} · {checklist.vehicle.plate_number}</p>
     </div>
@@ -171,7 +173,7 @@ function ChecklistDetail({
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-lg bg-subtle/60 p-3">
               <p className="text-xs text-muted">Driver</p>
-              <p className="mt-1 font-medium">{fullName(checklist.driver)}</p>
+              <p className="mt-1 font-medium"><DriverLink id={checklist.driver.id}>{fullName(checklist.driver)}</DriverLink></p>
             </div>
             <div className="rounded-lg bg-subtle/60 p-3">
               <p className="text-xs text-muted">Vehicle</p>
@@ -276,6 +278,8 @@ export function DailyChecklistsPage() {
   const status = (["IN_PROGRESS", "SUBMITTED"].includes(url.get("status")) ? url.get("status") : "") as ChecklistStatus | "";
   const analysis = (["PENDING", "PROCESSING", "COMPLETED", "FAILED"].includes(url.get("analysis")) ? url.get("analysis") : "") as AnalysisStatus | "";
   const review = url.get("review");
+  // Set by links from a driver page; narrows the list to that driver until cleared.
+  const driverId = url.get("driverId");
   // No range in the URL means "today"; a lone bound is treated as a single day.
   const today = lagosToday();
   const dateFrom = url.get("from") || url.get("to") || today;
@@ -290,11 +294,15 @@ export function DailyChecklistsPage() {
       phase: phase || undefined,
       status: status || undefined,
       analysisStatus: analysis || undefined,
+      driverId: driverId || undefined,
       needsReview: review === "true" ? true : undefined,
       searchTerm: search.committed || undefined,
     }),
-    [analysis, dateFrom, dateTo, phase, review, search.committed, status, url.page],
+    [analysis, dateFrom, dateTo, driverId, phase, review, search.committed, status, url.page],
   );
+
+  // Resolves the name for the driver chip (the users endpoint is admin-only).
+  const filterDriver = useManagedUser(driverId, user.user_type === "ADMIN" && Boolean(driverId));
 
   const list = useQuery({
     queryKey: queryKeys.dailyChecklists.list(filters),
@@ -314,10 +322,10 @@ export function DailyChecklistsPage() {
 
   const items = list.data?.items ?? [];
   const invalidRange = dateFrom && dateTo && dateFrom > dateTo;
-  const isFiltered = Boolean(search.text || phase || status || analysis || review || url.get("from") || url.get("to"));
+  const isFiltered = Boolean(search.text || phase || status || analysis || review || driverId || url.get("from") || url.get("to"));
   const clear = () => {
     search.setText("");
-    url.set({ q: "", phase: "", status: "", analysis: "", review: "", page: 1, from: "", to: "" });
+    url.set({ q: "", phase: "", status: "", analysis: "", review: "", driverId: "", page: 1, from: "", to: "" });
   };
   const applyRange = ({ from, to }: { from: string; to: string }) => {
     const isToday = from === today && to === today;
@@ -364,6 +372,18 @@ export function DailyChecklistsPage() {
             <option value="true">Needs review</option>
           </Select>
         </div>
+        {driverId && (
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="text-muted">Showing checklists for</span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-brand-soft py-1 pl-3 pr-1 font-medium text-brand">
+              {filterDriver.data ? fullName(filterDriver.data) : "one driver"}
+              <button type="button" aria-label="Show all drivers" onClick={() => url.set({ driverId: "", page: 1 })} className="flex size-6 items-center justify-center rounded-full transition hover:bg-brand/15">
+                <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden><path d="M6 6l12 12M18 6 6 18" /></svg>
+              </button>
+            </span>
+            <DriverLink id={driverId} className="text-xs font-medium text-brand">Open driver page</DriverLink>
+          </div>
+        )}
         {invalidRange && <p className="text-sm text-danger">The start date must be before or equal to the end date.</p>}
         <p className="text-xs text-muted">Live checklist updates refresh this view automatically.</p>
       </section>
