@@ -3,6 +3,7 @@ import { HydrationBoundary, dehydrate } from "@tanstack/react-query";
 import { AuthSync } from "@/components/auth/auth-sync";
 import { AppShell } from "@/components/dashboard/app-shell";
 import { QueryProvider } from "@/components/providers/query-provider";
+import { RealtimeProvider } from "@/components/providers/realtime-provider";
 import { requireUser } from "@/lib/auth/dal";
 import { navigationFor } from "@/lib/navigation";
 import { getQueryClient } from "@/lib/query/query-client";
@@ -22,7 +23,9 @@ export default async function DashboardLayout({ children }: LayoutProps<"/">) {
     <QueryProvider>
       <HydrationBoundary state={dehydrate(queryClient)}>
         <AuthSync />
-        <AppShell sections={navigationFor(user.user_type)}>{children}</AppShell>
+        <RealtimeProvider>
+          <AppShell sections={navigationFor(user.user_type)}>{children}</AppShell>
+        </RealtimeProvider>
       </HydrationBoundary>
     </QueryProvider>
   );

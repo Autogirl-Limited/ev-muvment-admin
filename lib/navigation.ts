@@ -6,6 +6,7 @@ export type NavIcon =
   | "security"
   | "applications"
   | "transactions"
+  | "checklists"
   | "fleet"
   | "configurations";
 
@@ -41,6 +42,12 @@ export const NAVIGATION: NavSection[] = [
         label: "Fleet vehicles",
         href: "/fleet-vehicles",
         icon: "fleet",
+        roles: ["ADMIN", "ACCOUNT_OFFICER", "RELATIONSHIP_OFFICER"],
+      },
+      {
+        label: "Daily checklists",
+        href: "/daily-checklists",
+        icon: "checklists",
         roles: ["ADMIN", "ACCOUNT_OFFICER", "RELATIONSHIP_OFFICER"],
       },
       {

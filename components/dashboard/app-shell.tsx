@@ -72,6 +72,14 @@ const ICONS: Record<NavIcon, ReactNode> = {
       <path d="M8 13h8M8 17h5" />
     </>
   ),
+  checklists: (
+    <>
+      <rect x="6" y="4" width="12" height="17" rx="2" />
+      <path d="M9 4h6v3H9z" />
+      <path d="m9 13 2 2 4-5" />
+      <path d="M9 18h6" />
+    </>
+  ),
 };
 
 function Icon({ name, className = "size-5" }: { name: NavIcon; className?: string }) {

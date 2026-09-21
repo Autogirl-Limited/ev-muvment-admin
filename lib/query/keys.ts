@@ -25,6 +25,11 @@ export const queryKeys = {
     detail: (id: string) => ["dva-transactions", "detail", id] as const,
     stats: (filters: unknown) => ["dva-transactions", "stats", filters] as const,
   },
+  dailyChecklists: {
+    all: ["daily-checklists"] as const,
+    list: (filters: unknown) => ["daily-checklists", "list", filters] as const,
+    detail: (id: string) => ["daily-checklists", "detail", id] as const,
+  },
   vehicles: {
     all: ["vehicles"] as const,
     list: (filters: unknown) => ["vehicles", "list", filters] as const,
