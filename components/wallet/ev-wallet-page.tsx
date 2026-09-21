@@ -196,7 +196,7 @@ export function EVWalletPage() {
       )}
 
       {isAdmin && (
-        <div className="grid gap-5 xl:grid-cols-[minmax(20rem,25rem)_1fr]">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-5 xl:grid-cols-[minmax(20rem,25rem)_minmax(0,1fr)]">
           <AllocationQueue
             allocations={queue}
             total={queueTotal}
