@@ -252,7 +252,10 @@ export function DvaTransactionsPage() {
     [dateFrom, dateTo, debouncedSearch, page, userId],
   );
 
-  const statsFilters = useMemo(() => ({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined }), [dateFrom, dateTo]);
+  const statsFilters = useMemo(
+    () => ({ userId: userId || undefined, dateFrom: dateFrom || undefined, dateTo: dateTo || undefined }),
+    [dateFrom, dateTo, userId],
+  );
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -409,7 +412,7 @@ export function DvaTransactionsPage() {
         <StatCard label="Settled after fees" value={stats.isLoading ? "..." : naira(stats.data?.total_settlement_amount ?? 0)} />
         <StatCard label="Transactions" value={stats.isLoading ? "..." : String(stats.data?.transaction_count ?? 0)} />
         <StatCard label="Drivers funded" value={stats.isLoading ? "..." : String(stats.data?.unique_drivers_funded ?? 0)} />
-        <StatCard label="Average transfer" value={stats.isLoading ? "..." : naira(Math.round(stats.data?.average_transaction_amount ?? 0))} sub={userId || debouncedSearch ? "Totals cover all drivers" : undefined} />
+        <StatCard label="Average transfer" value={stats.isLoading ? "..." : naira(Math.round(stats.data?.average_transaction_amount ?? 0))} sub={debouncedSearch.trim() ? "Totals ignore the search term" : undefined} />
       </section>
 
       <section className="rounded-lg border border-border bg-surface shadow-card">

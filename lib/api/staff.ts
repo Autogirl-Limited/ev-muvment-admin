@@ -62,6 +62,8 @@ export interface DvaTransaction {
 }
 
 export interface DvaTransactionStats {
+  /** Echo of the `userId` filter; `null` when the stats are platform-wide. */
+  user_id: string | null;
   date_from: string | null;
   date_to: string | null;
   total_amount: number;
@@ -165,7 +167,13 @@ export function getDvaTransaction(id: string, signal?: AbortSignal) {
   return apiFetch<DvaTransaction>(`/dva-transactions/${id}`, { signal });
 }
 
-export function getDvaStats(params: { dateFrom?: string; dateTo?: string }, signal?: AbortSignal) {
+export type DvaStatsParams = {
+  userId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+};
+
+export function getDvaStats(params: DvaStatsParams, signal?: AbortSignal) {
   return apiFetch<DvaTransactionStats>(`/dva-transactions/stats${toQuery(params)}`, { signal });
 }
 

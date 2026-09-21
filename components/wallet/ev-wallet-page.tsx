@@ -111,7 +111,10 @@ export function EVWalletPage() {
   const type = url.get("type") as AllocationType | "";
   const userId = url.get("userId");
 
-  const statsFilters = useMemo(() => ({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined }), [dateFrom, dateTo]);
+  const statsFilters = useMemo(
+    () => ({ userId: userId || undefined, dateFrom: dateFrom || undefined, dateTo: dateTo || undefined }),
+    [dateFrom, dateTo, userId],
+  );
   const ledgerFilters = useMemo(
     () => ({
       page: url.page,
@@ -186,7 +189,7 @@ export function EVWalletPage() {
         <section className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard label="Total credited" value={statsQuery.isLoading ? "..." : naira(statsQuery.data?.total_credited ?? 0)} hint={`${statsQuery.data?.total_count ?? 0} allocations`} />
           <StatCard label="Pending" value={statsQuery.isLoading ? "..." : naira(statsQuery.data?.pending_amount ?? 0)} hint={`${statsQuery.data?.pending_count ?? 0} waiting`} />
-          <StatCard label="Free grants" value={statsQuery.isLoading ? "..." : naira(statsQuery.data?.total_free_grants ?? 0)} hint={`${statsQuery.data?.unique_drivers ?? 0} drivers`} />
+          <StatCard label="Free grants" value={statsQuery.isLoading ? "..." : naira(statsQuery.data?.total_free_grants ?? 0)} hint={userId ? "Selected driver" : `${statsQuery.data?.unique_drivers ?? 0} drivers`} />
           <StatCard label="kWh allocated" value={statsQuery.isLoading ? "..." : `${(statsQuery.data?.total_kwh_allocated ?? 0).toLocaleString()} kWh`} hint={`Avg ${naira(statsQuery.data?.average_topup_amount ?? 0)}`} />
         </section>
       )}

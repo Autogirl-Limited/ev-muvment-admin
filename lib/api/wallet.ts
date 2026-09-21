@@ -30,6 +30,10 @@ export interface WalletAllocation {
 }
 
 export interface WalletStats {
+  /** Echo of the `userId` filter; `null` when the stats are platform-wide. */
+  user_id: string | null;
+  date_from: string | null;
+  date_to: string | null;
   total_credited: number;
   total_free_grants: number;
   total_paid_topups: number;
@@ -60,7 +64,13 @@ export function getWalletAllocation(id: string, signal?: AbortSignal) {
   return apiFetch<WalletAllocation>(`/wallet-allocations/${id}`, { signal });
 }
 
-export function getWalletStats(params: { dateFrom?: string; dateTo?: string }, signal?: AbortSignal) {
+export type WalletStatsParams = {
+  userId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+};
+
+export function getWalletStats(params: WalletStatsParams, signal?: AbortSignal) {
   return apiFetch<WalletStats>(`/wallet-allocations/stats${toQuery(params)}`, { signal });
 }
 
