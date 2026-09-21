@@ -8,6 +8,7 @@ import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Modal, ModalActions } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
 import { Select } from "@/components/ui/select";
@@ -53,17 +54,6 @@ function lagosDate(date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", { timeZone: LAGOS, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(date);
   const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
   return `${get("year")}-${get("month")}-${get("day")}`;
-}
-
-function firstDayOfMonth() {
-  const [year, month] = lagosDate().split("-");
-  return `${year}-${month}-01`;
-}
-
-function daysAgo(days: number) {
-  const date = new Date();
-  date.setDate(date.getDate() - days);
-  return lagosDate(date);
 }
 
 function labelStatus(status: AllocationStatus) {
@@ -168,11 +158,9 @@ export function EVWalletPage() {
     queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
   };
 
-  const setPreset = (preset: "today" | "7d" | "month" | "all") => {
-    if (preset === "today") url.set({ range: null, dateFrom: lagosDate(), dateTo: lagosDate() });
-    if (preset === "7d") url.set({ range: null, dateFrom: daysAgo(6), dateTo: lagosDate() });
-    if (preset === "month") url.set({ range: null, dateFrom: firstDayOfMonth(), dateTo: lagosDate() });
-    if (preset === "all") url.set({ range: "all", dateFrom: null, dateTo: null });
+  const applyRange = ({ from, to }: { from: string; to: string }) => {
+    if (!from) return url.set({ range: "all", dateFrom: null, dateTo: null });
+    url.set({ range: null, dateFrom: from, dateTo: to });
   };
 
   return (
@@ -182,37 +170,13 @@ export function EVWalletPage() {
         icon="bolt"
         showBackLink={false}
         description="Track wallet credits, pending paid top-ups and LotGrid allocation work."
-        actions={isAdmin ? <Button onClick={() => setFreeGrantOpen(true)}>Free grant</Button> : undefined}
+        actions={
+          <>
+            <DateRangePicker compact align="end" from={dateFrom} to={dateTo} onApply={applyRange} className="min-w-full sm:min-w-0 sm:w-72" />
+            {isAdmin && <Button onClick={() => setFreeGrantOpen(true)}>Free grant</Button>}
+          </>
+        }
       />
-
-      <section className="mb-5 rounded-lg border border-border bg-surface p-4">
-        <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto] md:items-end">
-          <label className="text-sm font-medium">
-            From
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(event) => url.set({ range: null, dateFrom: event.target.value })}
-              className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-brand focus:ring-3 focus:ring-brand/20"
-            />
-          </label>
-          <label className="text-sm font-medium">
-            To
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(event) => url.set({ range: null, dateTo: event.target.value })}
-              className="mt-1 h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-brand focus:ring-3 focus:ring-brand/20"
-            />
-          </label>
-          <div className="grid grid-cols-2 gap-2 sm:flex">
-            <Button variant="secondary" onClick={() => setPreset("today")}>Today</Button>
-            <Button variant="secondary" onClick={() => setPreset("7d")}>7 days</Button>
-            <Button variant="secondary" onClick={() => setPreset("month")}>Month</Button>
-            <Button variant="ghost" onClick={() => setPreset("all")}>All</Button>
-          </div>
-        </div>
-      </section>
 
       {statsQuery.isError ? (
         <ErrorState message={errorMessage(statsQuery.error, "Wallet stats are unavailable.")} onRetry={() => statsQuery.refetch()} />
