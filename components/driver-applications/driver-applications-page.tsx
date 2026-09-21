@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -146,6 +146,72 @@ function SkeletonRows() {
   );
 }
 
+function SkeletonCards() {
+  return (
+    <div className="grid gap-3 p-3 md:hidden">
+      {Array.from({ length: 5 }).map((_, index) => (
+        <div key={index} className="animate-pulse rounded-lg border border-border bg-surface p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-2">
+              <div className="h-4 w-36 rounded bg-subtle" />
+              <div className="h-3 w-28 rounded bg-subtle" />
+            </div>
+            <div className="h-6 w-20 rounded-full bg-subtle" />
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <div className="h-12 rounded-lg bg-subtle" />
+            <div className="h-12 rounded-lg bg-subtle" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ApplicationCard({ app, onOpen }: { app: DriverApplication; onOpen: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="w-full rounded-lg border border-border bg-surface p-4 text-left shadow-card transition active:scale-[0.99] hover:border-brand/50 hover:bg-subtle/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-base font-semibold">{fullName(app)}</p>
+          <p className="mt-0.5 truncate text-xs text-muted">@{app.username} · {dash(app.driver_license_number)}</p>
+        </div>
+        <StatusBadge status={app.status} />
+      </div>
+      <div className="mt-4 grid gap-2 text-sm">
+        <div className="rounded-lg bg-subtle/70 p-3">
+          <p className="text-xs text-muted">Contact</p>
+          <p className="mt-1 truncate font-medium">{dash(app.email)}</p>
+          <p className="truncate text-xs text-muted">{dash(app.phone_number)}</p>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-lg bg-subtle/70 p-3">
+            <p className="text-xs text-muted">Experience</p>
+            <p className="mt-1 font-medium">{app.years_of_experience} years</p>
+          </div>
+          <div className="rounded-lg bg-subtle/70 p-3">
+            <p className="text-xs text-muted">Applied</p>
+            <p className="mt-1 font-medium" title={formatDateTime(app.created_at)}>{relativeTime(app.created_at)}</p>
+          </div>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function DetailTile({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="min-w-0 rounded-lg bg-subtle/60 p-3">
+      <dt className="text-xs text-muted">{label}</dt>
+      <dd className="mt-1 break-words font-medium">{children}</dd>
+    </div>
+  );
+}
+
 function useDebounced(value: string, delay = 400) {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -207,7 +273,7 @@ export function DriverApplicationsPage() {
     queryFn: ({ signal }) => listDriverApplications(filters, signal),
     enabled: isAdmin,
     refetchOnWindowFocus: true,
-    refetchInterval: () => (document.visibilityState === "visible" ? 60_000 : false),
+    refetchInterval: () => (typeof document !== "undefined" && document.visibilityState === "visible" ? 60_000 : false),
   });
 
   const counts = useQuery({
@@ -350,7 +416,23 @@ export function DriverApplicationsPage() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        {list.isLoading ? (
+          <SkeletonCards />
+        ) : data?.items.length ? (
+          <div className="grid gap-3 p-3 md:hidden">
+            {data.items.map((app) => (
+              <ApplicationCard key={app.id} app={app} onOpen={() => setSelectedId(app.id)} />
+            ))}
+          </div>
+        ) : (
+          <div className="p-3 md:hidden">
+            <div className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted">
+              No {status === "ALL" ? "" : status.toLowerCase()} applications found.
+            </div>
+          </div>
+        )}
+
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full min-w-[58rem] text-left text-sm">
             <thead className="bg-subtle/70 text-xs uppercase text-muted">
               <tr>
@@ -410,32 +492,45 @@ export function DriverApplicationsPage() {
         </div>
       </section>
 
-      <Modal open={Boolean(selectedId)} onClose={() => setSelectedId(null)} title={selected ? fullName(selected) : "Application"}>
+      <Modal open={Boolean(selectedId)} onClose={() => setSelectedId(null)} title={selected ? fullName(selected) : "Application"} size="xl">
         {detail.isLoading ? (
-          <div className="h-40 animate-pulse rounded-lg bg-subtle" />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="h-32 animate-pulse rounded-lg bg-subtle" />
+            <div className="h-32 animate-pulse rounded-lg bg-subtle" />
+            <div className="h-48 animate-pulse rounded-lg bg-subtle sm:col-span-2" />
+          </div>
         ) : detail.error instanceof ApiError && detail.error.status === 403 ? (
           <AccessDenied />
         ) : selected ? (
           <div className="space-y-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <StatusBadge status={selected.status} />
-              <span className="text-xs text-muted">Applied {formatDateTime(selected.created_at)}</span>
-            </div>
-            <dl className="grid gap-3 text-sm sm:grid-cols-2">
-              {[
-                ["Username", selected.username],
-                ["Email", dash(selected.email)],
-                ["Phone", dash(selected.phone_number)],
-                ["Experience", `${selected.years_of_experience} years`],
-                ["License", dash(selected.driver_license_number)],
-                ["Review time", selected.status === "PENDING" ? "-" : formatDateTime(selected.updated_at)],
-              ].map(([label, value]) => (
-                <div key={label} className="rounded-lg bg-subtle/60 p-3">
-                  <dt className="text-xs text-muted">{label}</dt>
-                  <dd className="mt-1 break-words font-medium">{value}</dd>
+            <div className="rounded-lg border border-border bg-subtle/40 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <StatusBadge status={selected.status} />
+                    <span className="text-xs text-muted">Applied {formatDateTime(selected.created_at)}</span>
+                  </div>
+                  <p className="mt-3 text-xl font-semibold tracking-tight sm:text-2xl">{fullName(selected)}</p>
+                  <p className="mt-1 break-words text-sm text-muted">@{selected.username} · {dash(selected.driver_license_number)}</p>
                 </div>
-              ))}
+                {selected.status === "APPROVED" && (
+                  <div className="rounded-lg bg-surface p-3 text-sm sm:min-w-48">
+                    <p className="text-xs text-muted">EV wallet balance</p>
+                    <p className="mt-1 text-lg font-semibold">{naira(selected.ev_wallet_balance)}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <dl className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
+              <DetailTile label="Username">{selected.username}</DetailTile>
+              <DetailTile label="Email">{dash(selected.email)}</DetailTile>
+              <DetailTile label="Phone">{dash(selected.phone_number)}</DetailTile>
+              <DetailTile label="Experience">{selected.years_of_experience} years</DetailTile>
+              <DetailTile label="License">{dash(selected.driver_license_number)}</DetailTile>
+              <DetailTile label="Review time">{selected.status === "PENDING" ? "-" : formatDateTime(selected.updated_at)}</DetailTile>
             </dl>
+
             {selected.status === "REJECTED" && (
               <div className="rounded-lg border border-danger/30 bg-danger-soft p-3 text-sm">
                 <p className="font-medium text-danger">Rejection reason</p>
@@ -445,10 +540,10 @@ export function DriverApplicationsPage() {
             {selected.status === "APPROVED" && selected.virtual_account && (
               <div className="space-y-3">
                 <DvaCard account={selected.virtual_account} />
-                <p className="text-sm text-muted">EV wallet balance: <span className="font-medium text-foreground">{naira(selected.ev_wallet_balance)}</span></p>
               </div>
             )}
-            <div className="flex flex-wrap gap-2">
+
+            <div className="grid gap-2 sm:flex sm:flex-wrap">
               {selected.status === "PENDING" && (
                 <>
                   <Button onClick={() => setApproveTarget(selected)}>Approve</Button>
@@ -459,8 +554,8 @@ export function DriverApplicationsPage() {
                 <>
                   <Button variant="secondary" disabled={!selected.email || resend.isPending} onClick={() => resend.mutate({ userId: selected.user_id!, channel: "EMAIL" })}>Email credentials</Button>
                   <Button variant="secondary" disabled={!selected.phone_number || resend.isPending} onClick={() => resend.mutate({ userId: selected.user_id!, channel: "SMS" })}>SMS credentials</Button>
-                  <a className="inline-flex h-10 items-center rounded-lg border border-border px-4 text-sm font-medium hover:bg-subtle" href={`/users/${selected.user_id}`}>View driver profile</a>
-                  <a className="inline-flex h-10 items-center rounded-lg border border-border px-4 text-sm font-medium hover:bg-subtle" href={`/dva-transactions?userId=${selected.user_id}`}>View transactions</a>
+                  <a className="inline-flex h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-medium hover:bg-subtle" href={`/users/${selected.user_id}`}>View driver profile</a>
+                  <a className="inline-flex h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-medium hover:bg-subtle" href={`/dva-transactions?userId=${selected.user_id}`}>View transactions</a>
                 </>
               )}
             </div>

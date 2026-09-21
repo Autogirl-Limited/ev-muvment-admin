@@ -8,13 +8,14 @@ interface ModalProps {
   title: string;
   children: ReactNode;
   /** `lg` suits forms and detail views; `md` (default) suits confirmations. */
-  size?: "md" | "lg";
+  size?: "md" | "lg" | "xl";
 }
 
 /** Thin wrapper over the native <dialog>: focus trapping and Esc come for free. */
 export function Modal({ open, onClose, title, children, size = "md" }: ModalProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
+  const width = size === "xl" ? "sm:max-w-4xl" : size === "lg" ? "sm:max-w-2xl" : "sm:max-w-md";
 
   useEffect(() => {
     const dialog = ref.current;
@@ -32,10 +33,10 @@ export function Modal({ open, onClose, title, children, size = "md" }: ModalProp
         if (event.target === ref.current) onClose();
       }}
       // Short screens (landscape phones): cap the height and scroll inside.
-      className={`m-auto max-h-[calc(100dvh-1.5rem)] w-[calc(100%-1.5rem)] ${size === "lg" ? "max-w-2xl" : "max-w-md"} overflow-y-auto overscroll-contain rounded-2xl border border-border bg-surface p-0 text-foreground shadow-card backdrop:bg-black/60 backdrop:backdrop-blur-[2px] open:animate-pop-in sm:max-h-[calc(100dvh-3rem)]`}
+      className={`m-0 mt-auto max-h-[100dvh] h-auto w-full ${width} overflow-y-auto overscroll-contain rounded-t-2xl border border-border bg-surface p-0 text-foreground shadow-card backdrop:bg-black/60 backdrop:backdrop-blur-[2px] open:animate-pop-in sm:m-auto sm:max-h-[calc(100dvh-3rem)] sm:w-[calc(100%-1.5rem)] sm:rounded-2xl`}
     >
       {open && (
-        <div className="space-y-4 p-5 sm:p-6">
+        <div className="space-y-4 p-4 sm:p-6">
           <div className="flex items-start justify-between gap-4">
             <h2 id={titleId} className="text-lg font-semibold tracking-tight">
               {title}
@@ -61,7 +62,7 @@ export function Modal({ open, onClose, title, children, size = "md" }: ModalProp
 /** Button row that stays visible while a tall dialog scrolls (small/short screens). */
 export function ModalActions({ children }: { children: ReactNode }) {
   return (
-    <div className="sticky bottom-0 -mx-5 -mb-5 flex justify-end gap-2 border-t border-border bg-surface px-5 py-4 sm:-mx-6 sm:-mb-6 sm:px-6">
+    <div className="sticky bottom-0 -mx-4 -mb-4 grid grid-cols-2 gap-2 border-t border-border bg-surface px-4 py-4 sm:-mx-6 sm:-mb-6 sm:flex sm:justify-end sm:px-6">
       {children}
     </div>
   );

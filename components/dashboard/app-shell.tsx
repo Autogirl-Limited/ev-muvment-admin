@@ -274,7 +274,7 @@ export function AppShell({ sections, children }: AppShellProps) {
       </Drawer>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-[calc(3.5rem+env(safe-area-inset-top))] shrink-0 items-center justify-between gap-3 border-b border-border bg-background/85 px-3 pt-[env(safe-area-inset-top)] backdrop-blur sm:px-6">
+        <header className="sticky top-0 z-30 flex h-[calc(3.5rem+env(safe-area-inset-top))] shrink-0 items-center justify-between gap-3 border-b border-border bg-background/85 px-3 pt-[env(safe-area-inset-top)] backdrop-blur sm:px-4 lg:px-6">
           <button
             type="button"
             aria-label="Open menu"
@@ -296,7 +296,7 @@ export function AppShell({ sections, children }: AppShellProps) {
         <main
           id="main"
           tabIndex={-1}
-          className="mx-auto w-full max-w-[90rem] flex-1 px-4 pb-[max(2rem,env(safe-area-inset-bottom))] pt-6 outline-none sm:px-6 lg:px-8 lg:pt-8"
+          className="w-full flex-1 px-3 pb-[max(2rem,env(safe-area-inset-bottom))] pt-6 outline-none sm:px-4 lg:px-6 lg:pt-8"
         >
           {children}
         </main>
