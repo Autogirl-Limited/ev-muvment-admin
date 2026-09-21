@@ -55,6 +55,22 @@ type Phase = "pick_up" | "drop_off";
 const PHASES: readonly Phase[] = ["pick_up", "drop_off"];
 const PHASE_LABEL: Record<Phase, string> = { pick_up: "Pick-up", drop_off: "Drop-off" };
 const trimTime = (time: string) => time.slice(0, 5);
+const COORDINATE_PAIR = /^\s*(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)\s*$/;
+
+interface PlaceSuggestion {
+  display_name: string;
+  place_id: string;
+  main_text: string;
+  secondary_text: string;
+}
+
+interface PlaceDetails {
+  result: {
+    address: string;
+    latitude: number;
+    longitude: number;
+  };
+}
 
 function formatLocation(location: ChecklistLocation | ChecklistLocationOverride | null) {
   if (!location) return "No location configured";
@@ -277,12 +293,7 @@ function ChecklistOverridesEditor({ vehicle, onClose }: { vehicle: Vehicle; onCl
               </div>
             )}
             {item.locationMode === "custom" && (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Address" value={item.address} onChange={(event) => update(phase, { address: event.target.value })} error={errors[`${phase}.address`]} className="sm:col-span-2" />
-                <Field label="Latitude" inputMode="decimal" value={item.latitude} onChange={(event) => update(phase, { latitude: event.target.value })} error={errors[`${phase}.latitude`]} />
-                <Field label="Longitude" inputMode="decimal" value={item.longitude} onChange={(event) => update(phase, { longitude: event.target.value })} error={errors[`${phase}.longitude`]} />
-                <Field label="Radius" inputMode="numeric" value={item.radius} onChange={(event) => update(phase, { radius: event.target.value.replace(/[^\d]/g, "").slice(0, 4) })} error={errors[`${phase}.radius`]} hint="Blank uses the global radius." trailing={<span className="pr-2 text-xs text-muted">m</span>} />
-              </div>
+              <OverrideLocationFields phase={phase} item={item} errors={errors} onChange={(next) => update(phase, next)} />
             )}
           </section>
         );
@@ -292,6 +303,130 @@ function ChecklistOverridesEditor({ vehicle, onClose }: { vehicle: Vehicle; onCl
         <Button variant="secondary" onClick={onClose} disabled={save.isPending}>Cancel</Button>
         <Button onClick={submit} disabled={!dirty} loading={save.isPending}>Save schedule</Button>
       </ModalActions>
+    </div>
+  );
+}
+
+function OverrideLocationFields({
+  phase,
+  item,
+  errors,
+  onChange,
+}: {
+  phase: Phase;
+  item: OverridePhaseForm;
+  errors: Record<string, string>;
+  onChange: (next: Partial<OverridePhaseForm>) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [suggestions, setSuggestions] = useState<PlaceSuggestion[] | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const search = async () => {
+    const input = query.trim();
+    if (!input) return;
+    setSearching(true);
+    setNotice(null);
+    try {
+      const response = await fetch(`/api/maps/places?input=${encodeURIComponent(input)}`);
+      if (!response.ok) throw new Error("search failed");
+      const payload = (await response.json()) as { results: PlaceSuggestion[] };
+      setSuggestions(payload.results);
+      if (payload.results.length === 0) setNotice("No places found. Try a nearby landmark or paste coordinates.");
+    } catch {
+      setSuggestions(null);
+      setNotice("Google Maps place search is unavailable right now. You can still enter the address and coordinates manually.");
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const choose = async (suggestion: PlaceSuggestion) => {
+    setSearching(true);
+    setNotice(null);
+    try {
+      const response = await fetch(`/api/maps/places?placeId=${encodeURIComponent(suggestion.place_id)}`);
+      if (!response.ok) throw new Error("details failed");
+      const payload = (await response.json()) as PlaceDetails;
+      onChange({
+        address: (payload.result.address || suggestion.display_name).slice(0, 255),
+        latitude: payload.result.latitude.toFixed(6),
+        longitude: payload.result.longitude.toFixed(6),
+      });
+      setQuery("");
+      setSuggestions(null);
+    } catch {
+      setNotice("Couldn't load that place. Try another suggestion or enter coordinates manually.");
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="space-y-2">
+        <label className="block text-sm font-medium" htmlFor={`${phase}-override-place-search`}>Find address or landmark</label>
+        <div className="flex gap-2">
+          <div className="relative min-w-0 flex-1">
+            <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
+            <input
+              id={`${phase}-override-place-search`}
+              value={query}
+              onChange={(event) => setQuery(event.target.value.slice(0, 200))}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  search();
+                }
+              }}
+              placeholder="Search Google Maps"
+              autoComplete="off"
+              className="h-10 w-full rounded-lg border border-input bg-surface pl-9 pr-3 text-sm outline-none transition placeholder:text-muted/60 pointer-coarse:h-11 pointer-coarse:text-base focus:border-brand focus:ring-3 focus:ring-brand/20"
+            />
+          </div>
+          <Button variant="secondary" onClick={search} loading={searching} disabled={!query.trim()}>Search</Button>
+        </div>
+        {suggestions && suggestions.length > 0 && (
+          <ul className="animate-fade-in divide-y divide-border overflow-hidden rounded-xl border border-border">
+            {suggestions.map((suggestion) => (
+              <li key={suggestion.place_id}>
+                <button
+                  type="button"
+                  onClick={() => choose(suggestion)}
+                  disabled={searching}
+                  className="flex w-full items-start gap-2.5 px-3 py-2.5 text-left text-sm transition hover:bg-subtle disabled:cursor-wait disabled:opacity-70"
+                >
+                  <Icon name="mapPin" className="mt-0.5 size-4 shrink-0 text-muted" />
+                  <span className="min-w-0">
+                    <span className="block break-words font-medium">{suggestion.main_text}</span>
+                    {suggestion.secondary_text && <span className="block break-words text-xs text-muted">{suggestion.secondary_text}</span>}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {notice && <Alert tone="info">{notice}</Alert>}
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Address" value={item.address} onChange={(event) => onChange({ address: event.target.value })} error={errors[`${phase}.address`]} className="sm:col-span-2" />
+        <Field
+          label="Latitude"
+          inputMode="decimal"
+          value={item.latitude}
+          onChange={(event) => {
+            const text = event.target.value;
+            const pair = COORDINATE_PAIR.exec(text);
+            if (pair) onChange({ latitude: pair[1], longitude: pair[2] });
+            else onChange({ latitude: text });
+          }}
+          error={errors[`${phase}.latitude`]}
+        />
+        <Field label="Longitude" inputMode="decimal" value={item.longitude} onChange={(event) => onChange({ longitude: event.target.value })} error={errors[`${phase}.longitude`]} />
+        <Field label="Radius" inputMode="numeric" value={item.radius} onChange={(event) => onChange({ radius: event.target.value.replace(/[^\d]/g, "").slice(0, 4) })} error={errors[`${phase}.radius`]} hint="Blank uses the global radius." trailing={<span className="pr-2 text-xs text-muted">m</span>} />
+      </div>
     </div>
   );
 }

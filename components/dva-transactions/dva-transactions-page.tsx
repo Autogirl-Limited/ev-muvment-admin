@@ -720,7 +720,7 @@ export function DvaTransactionsPage() {
                 transactions.data.items.map((tx) => (
                   <tr key={tx.id} onClick={() => setSelectedId(tx.id)} className="cursor-pointer border-t border-border transition hover:bg-subtle/60">
                     <td className="px-4 py-3">{formatDateTime(tx.paid_at)}</td>
-                    <td className="px-4 py-3 text-right font-semibold tabular-nums">{naira(tx.amount)}</td>
+                    <td className="px-4 py-3 font-semibold tabular-nums">{naira(tx.amount)}</td>
                     <td className="px-4 py-3">
                       <p>{dash(tx.payer_name)}</p>
                       <p className="text-xs text-muted">{dash(tx.payer_account_number)} · {dash(tx.payer_bank_code)}</p>
