@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Field } from "@/components/ui/field";
 import { Modal, ModalActions } from "@/components/ui/modal";
+import { Select } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
 import { ApiError } from "@/lib/api/browser";
 import type { ChecklistLocation } from "@/lib/api/checklists-groups";
@@ -260,28 +261,14 @@ function ChecklistOverridesEditor({ vehicle, onClose }: { vehicle: Vehicle; onCl
           <section key={phase} className="space-y-3 rounded-xl border border-border p-4">
             <h3 className="font-semibold">{PHASE_LABEL[phase]}</h3>
             <div className="grid gap-3 sm:grid-cols-2">
-              <label className="space-y-1.5 text-sm">
-                <span className="font-medium">Window</span>
-                <select
-                  value={item.windowMode}
-                  onChange={(event) => update(phase, { windowMode: event.target.value as OverridePhaseForm["windowMode"] })}
-                  className="h-10 w-full rounded-lg border border-input bg-surface px-3 text-sm outline-none focus:border-brand focus:ring-3 focus:ring-brand/20"
-                >
-                  <option value="default">Use global window</option>
-                  <option value="custom">Custom window</option>
-                </select>
-              </label>
-              <label className="space-y-1.5 text-sm">
-                <span className="font-medium">Location</span>
-                <select
-                  value={item.locationMode}
-                  onChange={(event) => update(phase, { locationMode: event.target.value as OverridePhaseForm["locationMode"] })}
-                  className="h-10 w-full rounded-lg border border-input bg-surface px-3 text-sm outline-none focus:border-brand focus:ring-3 focus:ring-brand/20"
-                >
-                  <option value="default">Use global location</option>
-                  <option value="custom">Custom location</option>
-                </select>
-              </label>
+              <Select label="Window" value={item.windowMode} onChange={(event) => update(phase, { windowMode: event.target.value as OverridePhaseForm["windowMode"] })}>
+                <option value="default">Use global window</option>
+                <option value="custom">Custom window</option>
+              </Select>
+              <Select label="Location" value={item.locationMode} onChange={(event) => update(phase, { locationMode: event.target.value as OverridePhaseForm["locationMode"] })}>
+                <option value="default">Use global location</option>
+                <option value="custom">Custom location</option>
+              </Select>
             </div>
             {item.windowMode === "custom" && (
               <div>

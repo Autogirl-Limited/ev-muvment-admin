@@ -8,6 +8,7 @@ import { ConfigPageHeader, EmptyState, ErrorState, SearchInput } from "@/compone
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DateRangePicker, dateLabel, lagosToday } from "@/components/ui/date-range-picker";
 import { Modal, ModalActions } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
 import { Select } from "@/components/ui/select";
@@ -24,7 +25,7 @@ import {
   type FlagSeverity,
   type ListDailyChecklistsParams,
 } from "@/lib/api/daily-checklists";
-import { LAGOS, formatDateTime, fullName } from "@/lib/format";
+import { formatDateTime, fullName } from "@/lib/format";
 import { useSearchState, useUrlState } from "@/lib/hooks/use-url-state";
 import { CACHE } from "@/lib/query/cache";
 import { queryKeys } from "@/lib/query/keys";
@@ -41,14 +42,6 @@ const ANALYSIS_LABEL: Record<AnalysisStatus, string> = {
   COMPLETED: "Completed",
   FAILED: "Failed",
 };
-
-function todayLagos() {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: LAGOS }).format(new Date());
-}
-
-function dateLabel(date: string) {
-  return new Intl.DateTimeFormat("en-NG", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(`${date}T00:00:00Z`));
-}
 
 function phaseTone(phase: ChecklistPhase) {
   return phase === "PICK_UP" ? "brand" : "neutral";
@@ -283,8 +276,10 @@ export function DailyChecklistsPage() {
   const status = (["IN_PROGRESS", "SUBMITTED"].includes(url.get("status")) ? url.get("status") : "") as ChecklistStatus | "";
   const analysis = (["PENDING", "PROCESSING", "COMPLETED", "FAILED"].includes(url.get("analysis")) ? url.get("analysis") : "") as AnalysisStatus | "";
   const review = url.get("review");
-  const dateFrom = url.get("from") || todayLagos();
-  const dateTo = url.get("to") || todayLagos();
+  // No range in the URL means "today"; a lone bound is treated as a single day.
+  const today = lagosToday();
+  const dateFrom = url.get("from") || url.get("to") || today;
+  const dateTo = url.get("to") || url.get("from") || today;
 
   const filters = useMemo<ListDailyChecklistsParams>(
     () => ({
@@ -319,9 +314,14 @@ export function DailyChecklistsPage() {
 
   const items = list.data?.items ?? [];
   const invalidRange = dateFrom && dateTo && dateFrom > dateTo;
+  const isFiltered = Boolean(search.text || phase || status || analysis || review || url.get("from") || url.get("to"));
   const clear = () => {
     search.setText("");
-    url.set({ q: "", phase: "", status: "", analysis: "", review: "", page: 1, from: todayLagos(), to: todayLagos() });
+    url.set({ q: "", phase: "", status: "", analysis: "", review: "", page: 1, from: "", to: "" });
+  };
+  const applyRange = ({ from, to }: { from: string; to: string }) => {
+    const isToday = from === today && to === today;
+    url.set({ from: isToday ? "" : from, to: isToday ? "" : to, page: 1 });
   };
 
   return (
@@ -335,47 +335,40 @@ export function DailyChecklistsPage() {
 
       <Stats items={items} />
 
-      <section className="overflow-hidden rounded-2xl border border-border bg-surface shadow-card">
-        <div className="space-y-3 border-b border-border p-4">
-          <div className="grid gap-3 lg:grid-cols-[minmax(16rem,1fr)_repeat(6,minmax(0,10rem))_auto] lg:items-end">
-            <SearchInput value={search.text} onChange={search.setText} placeholder="Search driver, vehicle or plate" label="Search checklists" />
-            <label className="space-y-1.5 text-sm">
-              <span className="font-medium">From</span>
-              <input type="date" value={dateFrom} onChange={(event) => url.set({ from: event.target.value, page: 1 })} className="h-10 w-full rounded-lg border border-input bg-surface px-3 text-sm outline-none focus:border-brand focus:ring-3 focus:ring-brand/20" />
-            </label>
-            <label className="space-y-1.5 text-sm">
-              <span className="font-medium">To</span>
-              <input type="date" value={dateTo} onChange={(event) => url.set({ to: event.target.value, page: 1 })} className="h-10 w-full rounded-lg border border-input bg-surface px-3 text-sm outline-none focus:border-brand focus:ring-3 focus:ring-brand/20" />
-            </label>
-            <Select label="Phase" value={phase} onChange={(event) => url.set({ phase: event.target.value, page: 1 })}>
-              <option value="">All phases</option>
-              <option value="PICK_UP">Pick-up</option>
-              <option value="DROP_OFF">Drop-off</option>
-            </Select>
-            <Select label="Status" value={status} onChange={(event) => url.set({ status: event.target.value, page: 1 })}>
-              <option value="">All statuses</option>
-              <option value="IN_PROGRESS">In progress</option>
-              <option value="SUBMITTED">Submitted</option>
-            </Select>
-            <Select label="Analysis" value={analysis} onChange={(event) => url.set({ analysis: event.target.value, page: 1 })}>
-              <option value="">Any analysis</option>
-              <option value="PENDING">Pending</option>
-              <option value="PROCESSING">Processing</option>
-              <option value="COMPLETED">Completed</option>
-              <option value="FAILED">Failed</option>
-            </Select>
-            <Select label="Review" value={review} onChange={(event) => url.set({ review: event.target.value, page: 1 })}>
-              <option value="">All</option>
-              <option value="true">Needs review</option>
-            </Select>
-            <Button variant="secondary" onClick={clear}>Clear</Button>
-          </div>
-          {invalidRange && <p className="text-sm text-danger">The start date must be before or equal to the end date.</p>}
-          <p className="text-sm text-muted">
-            Showing {dateLabel(dateFrom)} to {dateLabel(dateTo)}. Live checklist updates refresh this view automatically.
-          </p>
+      <section className="space-y-3 rounded-2xl border border-border bg-surface p-4 shadow-card">
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_19rem_auto]">
+          <SearchInput value={search.text} onChange={search.setText} placeholder="Search driver, vehicle or plate" label="Search checklists" />
+          <DateRangePicker compact allowAll={false} align="end" from={dateFrom} to={dateTo} onApply={applyRange} />
+          <Button variant="secondary" onClick={clear} disabled={!isFiltered}>Clear</Button>
         </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Select label="Phase" hideLabel value={phase} onChange={(event) => url.set({ phase: event.target.value, page: 1 })}>
+            <option value="">All phases</option>
+            <option value="PICK_UP">Pick-up</option>
+            <option value="DROP_OFF">Drop-off</option>
+          </Select>
+          <Select label="Status" hideLabel value={status} onChange={(event) => url.set({ status: event.target.value, page: 1 })}>
+            <option value="">All statuses</option>
+            <option value="IN_PROGRESS">In progress</option>
+            <option value="SUBMITTED">Submitted</option>
+          </Select>
+          <Select label="Analysis" hideLabel value={analysis} onChange={(event) => url.set({ analysis: event.target.value, page: 1 })}>
+            <option value="">Any analysis</option>
+            <option value="PENDING">Pending</option>
+            <option value="PROCESSING">Processing</option>
+            <option value="COMPLETED">Completed</option>
+            <option value="FAILED">Failed</option>
+          </Select>
+          <Select label="Review" hideLabel value={review} onChange={(event) => url.set({ review: event.target.value, page: 1 })}>
+            <option value="">All checklists</option>
+            <option value="true">Needs review</option>
+          </Select>
+        </div>
+        {invalidRange && <p className="text-sm text-danger">The start date must be before or equal to the end date.</p>}
+        <p className="text-xs text-muted">Live checklist updates refresh this view automatically.</p>
+      </section>
 
+      <section className="overflow-hidden rounded-2xl border border-border bg-surface shadow-card">
         {list.isLoading ? (
           <div className="animate-pulse divide-y divide-border">
             {Array.from({ length: 6 }).map((_, index) => <div key={index} className="h-20 bg-subtle/30" />)}

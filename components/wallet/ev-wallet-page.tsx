@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Modal, ModalActions } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
+import { Select } from "@/components/ui/select";
 import { ApiError } from "@/lib/api/browser";
 import { type DriverOption, listDriverOptions } from "@/lib/api/configuration";
 import type { Paginated } from "@/lib/api/staff";
@@ -362,14 +363,14 @@ function Ledger({
           <Button variant="secondary" onClick={() => onFilter({ status: null, type: null, userId: null, page: null })}>Clear filters</Button>
         </div>
         <div className="grid gap-2 md:grid-cols-4">
-          <select value={status} onChange={(event) => onFilter({ status: event.target.value || null })} className="h-10 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-brand focus:ring-3 focus:ring-brand/20">
+          <Select label="Status" hideLabel value={status} onChange={(event) => onFilter({ status: event.target.value || null })}>
             <option value="">All statuses</option>
             {STATUSES.map((item) => <option key={item} value={item}>{labelStatus(item)}</option>)}
-          </select>
-          <select value={type} onChange={(event) => onFilter({ type: event.target.value || null })} className="h-10 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-brand focus:ring-3 focus:ring-brand/20">
+          </Select>
+          <Select label="Type" hideLabel value={type} onChange={(event) => onFilter({ type: event.target.value || null })}>
             <option value="">All types</option>
             {TYPES.map((item) => <option key={item} value={item}>{TYPE_LABELS[item]}</option>)}
-          </select>
+          </Select>
           <Button variant="secondary" onClick={() => setDriverPickerOpen(true)}>{driver ? driverLabel(driver) : "Choose driver"}</Button>
           {status === "EXPIRED" && <Alert tone="info">Expired allocations may still change after gateway reconciliation.</Alert>}
         </div>
