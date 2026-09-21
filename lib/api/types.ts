@@ -27,6 +27,12 @@ export interface User {
   two_factor_enabled: boolean;
   /** Authenticator-app (TOTP) 2MFA is on. */
   totp_enabled: boolean;
+  /** Driver wallet balance; staff receive 0. */
+  ev_wallet_balance: number;
+  virtual_account: unknown | null;
+  vehicle: unknown | null;
+  /** Drivers are on shift between submitted pick-up and submitted drop-off; staff are always false. */
+  shift: boolean;
 }
 
 /** Response of /auth/login, /auth/login/verify-* and /auth/refresh. */

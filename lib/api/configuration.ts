@@ -120,6 +120,31 @@ export interface VehicleDriver {
   phone_number: string | null;
 }
 
+export interface ChecklistWindowOverride {
+  start_time: string;
+  end_time: string;
+}
+
+export interface ChecklistLocationOverride {
+  address: string;
+  latitude: number;
+  longitude: number;
+  /** `null` means use the global radius for that phase. */
+  radius_meters: number | null;
+}
+
+export interface ChecklistPhaseOverride {
+  /** `null` means this vehicle follows the global window. */
+  window: ChecklistWindowOverride | null;
+  /** `null` means this vehicle follows the global location. */
+  location: ChecklistLocationOverride | null;
+}
+
+export interface ChecklistOverrides {
+  pick_up: ChecklistPhaseOverride;
+  drop_off: ChecklistPhaseOverride;
+}
+
 export interface Vehicle {
   id: string;
   created_at: string;
@@ -134,6 +159,7 @@ export interface Vehicle {
   driver: VehicleDriver | null;
   assigned_at: string | null;
   assigned_by: string | null;
+  checklist_overrides: ChecklistOverrides;
 }
 
 export interface CreateVehicleRequest {
@@ -187,6 +213,18 @@ export function assignDriver(vehicleId: string, driverId: string) {
 
 export function unassignDriver(vehicleId: string) {
   return apiFetch<Vehicle>(`/vehicles/${vehicleId}/unassign`, { method: "POST" });
+}
+
+export interface UpdateChecklistOverridesRequest {
+  pick_up?: {
+    window?: ChecklistWindowOverride | null;
+    location?: { address: string; latitude: number; longitude: number; radius_meters?: number | null } | null;
+  } | null;
+  drop_off?: UpdateChecklistOverridesRequest["pick_up"];
+}
+
+export function updateVehicleChecklistOverrides(vehicleId: string, body: UpdateChecklistOverridesRequest) {
+  return apiFetch<Vehicle>(`/vehicles/${vehicleId}/checklist-overrides`, { method: "PATCH", body });
 }
 
 /** A driver as listed by `GET /users?userType=DRIVER`, including the vehicle they hold. */

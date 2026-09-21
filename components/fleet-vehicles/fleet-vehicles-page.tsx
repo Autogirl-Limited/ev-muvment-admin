@@ -50,6 +50,11 @@ function DriverCell({ vehicle }: { vehicle: Vehicle }) {
   );
 }
 
+function hasCustomSchedule(vehicle: Vehicle) {
+  const overrides = vehicle.checklist_overrides;
+  return Boolean(overrides.pick_up.window || overrides.pick_up.location || overrides.drop_off.window || overrides.drop_off.location);
+}
+
 export function FleetVehiclesPage() {
   const user = useCurrentUser();
   const isAdmin = user.user_type === "ADMIN";
@@ -226,7 +231,10 @@ export function FleetVehiclesPage() {
                     >
                       {vehicle.name}
                     </button>
-                    <PlateChip plate={vehicle.plate_number} />
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <PlateChip plate={vehicle.plate_number} />
+                      {hasCustomSchedule(vehicle) && <Badge tone="brand">Custom schedule</Badge>}
+                    </div>
                   </div>
                   <p className="flex items-center gap-1.5 text-sm text-muted md:text-foreground">
                     {vehicle.location_state}

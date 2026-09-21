@@ -8,9 +8,11 @@ import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Field } from "@/components/ui/field";
 import { Modal, ModalActions } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
 import { ApiError } from "@/lib/api/browser";
+import type { ChecklistLocation } from "@/lib/api/checklists-groups";
 import {
   assignDriver,
   deleteVehicle,
@@ -18,12 +20,17 @@ import {
   listDriverOptions,
   listVehicles,
   unassignDriver,
+  updateVehicleChecklistOverrides,
+  type ChecklistLocationOverride,
+  type ChecklistWindowOverride,
   type DriverOption,
+  type UpdateChecklistOverridesRequest,
   type Vehicle,
 } from "@/lib/api/configuration";
 import { formatDateTime, fullName } from "@/lib/format";
 import { useDebounced } from "@/lib/hooks/use-debounced";
 import { CACHE } from "@/lib/query/cache";
+import { configQueries } from "@/lib/query/configuration";
 import { queryKeys } from "@/lib/query/keys";
 
 export function PlateChip({ plate }: { plate: string }) {
@@ -44,6 +51,16 @@ function useRefreshFleet() {
 }
 
 const errorText = (error: unknown, fallback: string) => (error instanceof ApiError ? error.message : fallback);
+type Phase = "pick_up" | "drop_off";
+const PHASES: readonly Phase[] = ["pick_up", "drop_off"];
+const PHASE_LABEL: Record<Phase, string> = { pick_up: "Pick-up", drop_off: "Drop-off" };
+const trimTime = (time: string) => time.slice(0, 5);
+
+function formatLocation(location: ChecklistLocation | ChecklistLocationOverride | null) {
+  if (!location) return "No location configured";
+  const radius = location.radius_meters === null ? "default radius" : `${location.radius_meters.toLocaleString("en-NG")} m`;
+  return `${location.address} (${location.latitude}, ${location.longitude}; ${radius})`;
+}
 
 // ---------- Details ----------
 interface DetailsProps {
@@ -66,10 +83,228 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+function ScheduleRow({
+  label,
+  custom,
+  children,
+}: {
+  label: string;
+  custom: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div className="rounded-lg bg-subtle/60 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-muted">{label}</p>
+        <Badge tone={custom ? "brand" : "neutral"}>{custom ? "Custom" : "Default"}</Badge>
+      </div>
+      <p className="mt-1 break-words text-sm font-medium">{children}</p>
+    </div>
+  );
+}
+
+interface OverridePhaseForm {
+  windowMode: "default" | "custom";
+  start: string;
+  end: string;
+  locationMode: "default" | "custom";
+  address: string;
+  latitude: string;
+  longitude: string;
+  radius: string;
+}
+
+type OverrideForm = Record<Phase, OverridePhaseForm>;
+
+function overrideForm(vehicle: Vehicle): OverrideForm {
+  const phase = (name: Phase): OverridePhaseForm => {
+    const current = vehicle.checklist_overrides[name];
+    return {
+      windowMode: current.window ? "custom" : "default",
+      start: current.window ? trimTime(current.window.start_time) : "",
+      end: current.window ? trimTime(current.window.end_time) : "",
+      locationMode: current.location ? "custom" : "default",
+      address: current.location?.address ?? "",
+      latitude: current.location ? String(current.location.latitude) : "",
+      longitude: current.location ? String(current.location.longitude) : "",
+      radius: current.location?.radius_meters == null ? "" : String(current.location.radius_meters),
+    };
+  };
+  return { pick_up: phase("pick_up"), drop_off: phase("drop_off") };
+}
+
+const sameWindow = (left: ChecklistWindowOverride | null, form: OverridePhaseForm) =>
+  form.windowMode === "default"
+    ? left === null
+    : Boolean(left && trimTime(left.start_time) === form.start && trimTime(left.end_time) === form.end);
+
+const sameLocation = (left: ChecklistLocationOverride | null, form: OverridePhaseForm) => {
+  if (form.locationMode === "default") return left === null;
+  const radius = form.radius.trim() ? Number(form.radius) : null;
+  return Boolean(
+    left &&
+      left.address === form.address.trim() &&
+      left.latitude === Number(form.latitude) &&
+      left.longitude === Number(form.longitude) &&
+      left.radius_meters === radius,
+  );
+};
+
+function validateOverrides(form: OverrideForm) {
+  const errors: Record<string, string> = {};
+  for (const phase of PHASES) {
+    const item = form[phase];
+    if (item.windowMode === "custom") {
+      if (!item.start || !item.end) errors[`${phase}.window`] = "Set both start and end times.";
+      else if (item.end <= item.start) errors[`${phase}.window`] = "The window must close after it opens.";
+    }
+    if (item.locationMode === "custom") {
+      const latitude = Number(item.latitude);
+      const longitude = Number(item.longitude);
+      const radius = item.radius.trim() ? Number(item.radius) : null;
+      if (!item.address.trim()) errors[`${phase}.address`] = "Enter the address drivers will see.";
+      if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) errors[`${phase}.latitude`] = "Latitude must be between -90 and 90.";
+      if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) errors[`${phase}.longitude`] = "Longitude must be between -180 and 180.";
+      if (radius !== null && (!Number.isInteger(radius) || radius < 20 || radius > 5000)) {
+        errors[`${phase}.radius`] = "Radius must be 20 to 5,000 m, or blank for the global radius.";
+      }
+    }
+  }
+  return errors;
+}
+
+function buildOverridesPatch(vehicle: Vehicle, form: OverrideForm): UpdateChecklistOverridesRequest {
+  const patch: UpdateChecklistOverridesRequest = {};
+  for (const phase of PHASES) {
+    const current = vehicle.checklist_overrides[phase];
+    const item = form[phase];
+    const change: NonNullable<UpdateChecklistOverridesRequest[Phase]> = {};
+
+    if (!sameWindow(current.window, item)) {
+      change.window = item.windowMode === "default" ? null : { start_time: item.start, end_time: item.end };
+    }
+    if (!sameLocation(current.location, item)) {
+      change.location =
+        item.locationMode === "default"
+          ? null
+          : {
+              address: item.address.trim(),
+              latitude: Number(item.latitude),
+              longitude: Number(item.longitude),
+              ...(item.radius.trim() ? { radius_meters: Number(item.radius) } : {}),
+            };
+    }
+    if (Object.keys(change).length) patch[phase] = change;
+  }
+  return patch;
+}
+
+function ChecklistOverridesEditor({ vehicle, onClose }: { vehicle: Vehicle; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const [form, setForm] = useState(() => overrideForm(vehicle));
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [apiError, setApiError] = useState<string | null>(null);
+  const patch = buildOverridesPatch(vehicle, form);
+  const dirty = Object.keys(patch).length > 0;
+
+  const save = useMutation({
+    mutationFn: () => updateVehicleChecklistOverrides(vehicle.id, patch),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(queryKeys.vehicles.detail(vehicle.id), updated);
+      queryClient.invalidateQueries({ queryKey: queryKeys.vehicles.all });
+      toast.success("Checklist schedule updated.");
+      onClose();
+    },
+    onError: (error) => {
+      if (error instanceof ApiError && error.status === 422) setErrors(error.fieldErrors);
+      setApiError(errorText(error, "Couldn't update this schedule."));
+    },
+  });
+
+  const update = (phase: Phase, next: Partial<OverridePhaseForm>) => {
+    setForm((current) => ({ ...current, [phase]: { ...current[phase], ...next } }));
+    setErrors({});
+    setApiError(null);
+  };
+
+  const submit = () => {
+    const nextErrors = validateOverrides(form);
+    setErrors(nextErrors);
+    setApiError(null);
+    if (Object.keys(nextErrors).length === 0 && dirty) save.mutate();
+  };
+
+  return (
+    <div className="space-y-5">
+      <Alert tone="info">Blank radius means this vehicle uses the global radius for that phase. Resetting a row makes the vehicle follow the global setting again.</Alert>
+      {PHASES.map((phase) => {
+        const item = form[phase];
+        return (
+          <section key={phase} className="space-y-3 rounded-xl border border-border p-4">
+            <h3 className="font-semibold">{PHASE_LABEL[phase]}</h3>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="space-y-1.5 text-sm">
+                <span className="font-medium">Window</span>
+                <select
+                  value={item.windowMode}
+                  onChange={(event) => update(phase, { windowMode: event.target.value as OverridePhaseForm["windowMode"] })}
+                  className="h-10 w-full rounded-lg border border-input bg-surface px-3 text-sm outline-none focus:border-brand focus:ring-3 focus:ring-brand/20"
+                >
+                  <option value="default">Use global window</option>
+                  <option value="custom">Custom window</option>
+                </select>
+              </label>
+              <label className="space-y-1.5 text-sm">
+                <span className="font-medium">Location</span>
+                <select
+                  value={item.locationMode}
+                  onChange={(event) => update(phase, { locationMode: event.target.value as OverridePhaseForm["locationMode"] })}
+                  className="h-10 w-full rounded-lg border border-input bg-surface px-3 text-sm outline-none focus:border-brand focus:ring-3 focus:ring-brand/20"
+                >
+                  <option value="default">Use global location</option>
+                  <option value="custom">Custom location</option>
+                </select>
+              </label>
+            </div>
+            {item.windowMode === "custom" && (
+              <div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label="Opens" type="time" step={60} value={item.start} onChange={(event) => update(phase, { start: event.target.value })} />
+                  <Field label="Closes" type="time" step={60} value={item.end} onChange={(event) => update(phase, { end: event.target.value })} />
+                </div>
+                {errors[`${phase}.window`] && <p className="mt-1.5 text-xs text-danger">{errors[`${phase}.window`]}</p>}
+              </div>
+            )}
+            {item.locationMode === "custom" && (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Address" value={item.address} onChange={(event) => update(phase, { address: event.target.value })} error={errors[`${phase}.address`]} className="sm:col-span-2" />
+                <Field label="Latitude" inputMode="decimal" value={item.latitude} onChange={(event) => update(phase, { latitude: event.target.value })} error={errors[`${phase}.latitude`]} />
+                <Field label="Longitude" inputMode="decimal" value={item.longitude} onChange={(event) => update(phase, { longitude: event.target.value })} error={errors[`${phase}.longitude`]} />
+                <Field label="Radius" inputMode="numeric" value={item.radius} onChange={(event) => update(phase, { radius: event.target.value.replace(/[^\d]/g, "").slice(0, 4) })} error={errors[`${phase}.radius`]} hint="Blank uses the global radius." trailing={<span className="pr-2 text-xs text-muted">m</span>} />
+              </div>
+            )}
+          </section>
+        );
+      })}
+      {apiError && <Alert tone="error">{apiError}</Alert>}
+      <ModalActions>
+        <Button variant="secondary" onClick={onClose} disabled={save.isPending}>Cancel</Button>
+        <Button onClick={submit} disabled={!dirty} loading={save.isPending}>Save schedule</Button>
+      </ModalActions>
+    </div>
+  );
+}
+
 export function VehicleDetails({ id, isAdmin, onClose, onEdit, onAssign, onUnassign, onReassign, onDelete }: DetailsProps) {
+  const [editingSchedule, setEditingSchedule] = useState(false);
   const query = useQuery({
     queryKey: queryKeys.vehicles.detail(id ?? ""),
     queryFn: ({ signal }) => getVehicle(id!, signal),
+    enabled: id !== null,
+  });
+  const settings = useQuery({
+    ...configQueries.checklistSettings(),
     enabled: id !== null,
   });
   const vehicle = query.data;
@@ -122,6 +357,41 @@ export function VehicleDetails({ id, isAdmin, onClose, onEdit, onAssign, onUnass
             )}
           </div>
 
+          <div className="rounded-xl border border-border p-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-xs font-medium uppercase text-muted">Checklist schedule</p>
+                <p className="mt-1 text-sm text-muted">Custom rows override the global pick-up or drop-off defaults for this vehicle.</p>
+              </div>
+              <Button variant="secondary" onClick={() => setEditingSchedule(true)}>Edit schedule</Button>
+            </div>
+            {settings.isLoading ? (
+              <div className="mt-3 h-24 animate-pulse rounded-lg bg-subtle" />
+            ) : settings.isError ? (
+              <div className="mt-3"><Alert tone="error">{settings.error.message}</Alert></div>
+            ) : settings.data ? (
+              <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                {PHASES.map((phase) => {
+                  const override = vehicle.checklist_overrides[phase];
+                  const global = settings.data[phase];
+                  const window = override.window ?? global;
+                  const location = override.location ?? global.location;
+                  return (
+                    <div key={phase} className="space-y-2 rounded-xl border border-border/70 p-3">
+                      <p className="font-medium">{PHASE_LABEL[phase]}</p>
+                      <ScheduleRow label="Window" custom={Boolean(override.window)}>
+                        {trimTime(window.start_time)} to {trimTime(window.end_time)} WAT
+                      </ScheduleRow>
+                      <ScheduleRow label="Location" custom={Boolean(override.location)}>
+                        {formatLocation(location)}
+                      </ScheduleRow>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
+
           <div className="flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:flex-wrap sm:justify-end">
             <Button variant="ghost" onClick={() => onDelete(vehicle)} className="text-danger hover:bg-danger-soft hover:text-danger">Delete</Button>
             <Button variant="secondary" onClick={() => onEdit(vehicle)}>Edit details</Button>
@@ -134,6 +404,10 @@ export function VehicleDetails({ id, isAdmin, onClose, onEdit, onAssign, onUnass
               isAdmin && <Button onClick={() => onAssign(vehicle)}>Assign driver</Button>
             )}
           </div>
+
+          <Modal open={editingSchedule} onClose={() => setEditingSchedule(false)} title={`Checklist schedule for ${vehicle.name}`} size="lg">
+            <ChecklistOverridesEditor vehicle={vehicle} onClose={() => setEditingSchedule(false)} />
+          </Modal>
         </div>
       ) : null}
     </Modal>
