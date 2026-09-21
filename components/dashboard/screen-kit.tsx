@@ -92,6 +92,13 @@ const PATHS = {
     </>
   ),
   check: <path d="m5 12 4 4L19 6" />,
+  bell: (
+    <>
+      <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+      <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+    </>
+  ),
+  checkAll: <path d="M2 12.5 6.5 17 15 7.5M11 16l1 1 9-10" />,
   external: <path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />,
   arrowUp: <path d="M12 19V5m-6 6 6-6 6 6" />,
   arrowDown: <path d="M12 5v14m-6-6 6 6 6-6" />,

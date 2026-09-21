@@ -32,6 +32,12 @@ export const queryKeys = {
     stats: (filters: unknown) => ["wallet-allocations", "stats", filters] as const,
     queue: ["wallet-allocations", "queue"] as const,
   },
+  notifications: {
+    all: ["notifications"] as const,
+    list: (filters: unknown) => ["notifications", "list", filters] as const,
+    detail: (id: string) => ["notifications", "detail", id] as const,
+    unreadCount: ["notifications", "unread-count"] as const,
+  },
   dailyChecklists: {
     all: ["daily-checklists"] as const,
     list: (filters: unknown) => ["daily-checklists", "list", filters] as const,

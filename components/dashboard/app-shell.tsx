@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { Logo } from "@/components/brand/logo";
+import { NotificationBell } from "@/components/notifications/notification-bell";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { ROLE_LABELS, type NavIcon, type NavSection } from "@/lib/navigation";
 import { useCurrentUser } from "@/lib/query/user";
@@ -78,6 +79,12 @@ const ICONS: Record<NavIcon, ReactNode> = {
       <path d="M16 11h5v5h-5a2.5 2.5 0 0 1 0-5Z" />
       <path d="M7 5.5 14 3" />
       <circle cx="16.5" cy="13.5" r=".7" />
+    </>
+  ),
+  notifications: (
+    <>
+      <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+      <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
     </>
   ),
   checklists: (
@@ -304,6 +311,7 @@ export function AppShell({ sections, children }: AppShellProps) {
           <div className="hidden lg:block" />
 
           <div className="flex items-center gap-2 sm:gap-3">
+            <NotificationBell />
             <ThemeToggle />
             <UserMenu />
           </div>

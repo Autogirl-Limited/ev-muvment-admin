@@ -4,6 +4,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import type { ChecklistResponse } from "@/lib/api/daily-checklists";
+import type { AppNotification } from "@/lib/api/notifications";
 import type { DvaTransaction } from "@/lib/api/staff";
 import type { WalletAllocation } from "@/lib/api/wallet";
 import { queryKeys } from "@/lib/query/keys";
@@ -28,6 +29,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
   const toast = useToast();
   const seenDvaIds = useRef(new Set<string>());
   const seenChecklistUpdates = useRef(new Set<string>());
+  const seenNotificationIds = useRef(new Set<string>());
 
   useEffect(() => {
     let cancelled = false;
@@ -90,8 +92,20 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
           );
           break;
         }
-        case "notification.created":
+        case "notification.created": {
+          const notification = data as AppNotification;
+          if (!notification?.id || seenNotificationIds.current.has(notification.id)) break;
+          seenNotificationIds.current.add(notification.id);
+          // Bump the badge straight away; the invalidation below reconciles it with the server.
+          if (!notification.is_read) {
+            queryClient.setQueryData<{ unread_count: number }>(queryKeys.notifications.unreadCount, (current) =>
+              current ? { unread_count: current.unread_count + 1 } : current,
+            );
+          }
+          queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all });
+          toast.info(notification.title);
           break;
+        }
         default:
           break;
       }
@@ -107,6 +121,8 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
           queryClient.invalidateQueries({ queryKey: queryKeys.dvaTransactions.all });
           queryClient.invalidateQueries({ queryKey: queryKeys.dailyChecklists.all });
           queryClient.invalidateQueries({ queryKey: queryKeys.walletAllocations.all });
+          // The socket buffers nothing while it is down, so re-sync anything missed.
+          queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all });
         };
         socket.onmessage = (message) => {
           try {

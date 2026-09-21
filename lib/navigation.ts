@@ -8,6 +8,7 @@ export type NavIcon =
   | "transactions"
   | "wallet"
   | "checklists"
+  | "notifications"
   | "fleet"
   | "configurations";
 
@@ -79,6 +80,7 @@ export const NAVIGATION: NavSection[] = [
   {
     title: "Account",
     items: [
+      { label: "Notifications", href: "/notifications", icon: "notifications" },
       { label: "Profile", href: "/settings/profile", icon: "profile" },
       { label: "Security", href: "/settings/security", icon: "security" },
     ],
