@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -171,11 +171,16 @@ function DateRangePicker({
   from,
   to,
   onApply,
+  align = "start",
+  className = "",
 }: {
   from: string;
   to: string;
   onApply: (range: { from: string; to: string }) => void;
+  align?: "start" | "end";
+  className?: string;
 }) {
+  const popoverRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [draftFrom, setDraftFrom] = useState(from);
   const [draftTo, setDraftTo] = useState(to);
@@ -230,9 +235,26 @@ function DateRangePicker({
     onApply({ from: draftFrom, to: draftTo || draftFrom });
     setOpen(false);
   };
+  const panelAlign = align === "end" ? "sm:left-auto sm:right-0" : "sm:right-auto";
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!popoverRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
 
   return (
-    <div className="relative">
+    <div ref={popoverRef} className={`relative ${className}`}>
       <button
         type="button"
         onClick={() => {
@@ -241,17 +263,27 @@ function DateRangePicker({
           setMonth((from || lagosToday()).slice(0, 7));
           setOpen((value) => !value);
         }}
-        className="flex h-10 w-full items-center justify-between gap-3 rounded-lg border border-input bg-surface px-3 text-left text-sm transition hover:bg-subtle focus:border-brand focus:outline-none focus:ring-3 focus:ring-brand/20 pointer-coarse:h-11 pointer-coarse:text-base"
+        className="group flex h-12 w-full items-center justify-between gap-3 rounded-xl border border-border bg-surface px-3 text-left text-sm shadow-card transition hover:border-brand/50 hover:bg-subtle focus:border-brand focus:outline-none focus:ring-3 focus:ring-brand/20 pointer-coarse:h-12 pointer-coarse:text-base"
       >
-        <span className="min-w-0">
-          <span className="block text-xs text-muted">Date range</span>
-          <span className="block truncate font-medium">{rangeLabel(from, to)}</span>
+        <span aria-hidden className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-brand">
+          <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M8 2v4M16 2v4M4 10h16" />
+            <rect x="4" y="4" width="16" height="18" rx="2" />
+          </svg>
         </span>
-        <span aria-hidden className="text-muted">v</span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[0.7rem] font-semibold uppercase tracking-wide text-muted">Date range</span>
+          <span className="block truncate font-semibold">{rangeLabel(from, to)}</span>
+        </span>
+        <span aria-hidden className="flex size-8 shrink-0 items-center justify-center rounded-lg text-muted transition group-hover:bg-surface group-hover:text-foreground">
+          <svg viewBox="0 0 24 24" className={`size-4 transition ${open ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        </span>
       </button>
 
       {open && (
-        <div className="absolute left-0 right-0 z-20 mt-2 overflow-hidden rounded-xl border border-border bg-surface shadow-card sm:right-auto sm:w-[42rem]">
+        <div className={`absolute left-0 right-0 z-20 mt-2 overflow-hidden rounded-xl border border-border bg-surface shadow-card sm:w-[42rem] ${panelAlign}`}>
           <div className="grid gap-0 sm:grid-cols-[12rem_minmax(0,1fr)]">
             <div className="border-b border-border bg-subtle/50 p-3 sm:border-b-0 sm:border-r">
               <p className="px-1 text-xs font-semibold uppercase text-muted">Quick ranges</p>
@@ -277,12 +309,16 @@ function DateRangePicker({
 
             <div className="p-3">
               <div className="flex items-center justify-between gap-3">
-                <button type="button" onClick={() => setMonth(shiftMonth(month, -1))} className="size-9 rounded-lg text-muted hover:bg-subtle" aria-label="Previous month">
-                  &lt;
+                <button type="button" onClick={() => setMonth(shiftMonth(month, -1))} className="flex size-9 items-center justify-center rounded-lg text-muted hover:bg-subtle hover:text-foreground" aria-label="Previous month">
+                  <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="m15 18-6-6 6-6" />
+                  </svg>
                 </button>
                 <p className="font-semibold">{monthLabel(month)}</p>
-                <button type="button" onClick={() => setMonth(shiftMonth(month, 1))} className="size-9 rounded-lg text-muted hover:bg-subtle" aria-label="Next month">
-                  &gt;
+                <button type="button" onClick={() => setMonth(shiftMonth(month, 1))} className="flex size-9 items-center justify-center rounded-lg text-muted hover:bg-subtle hover:text-foreground" aria-label="Next month">
+                  <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="m9 18 6-6-6-6" />
+                  </svg>
                 </button>
               </div>
 
@@ -426,12 +462,12 @@ export function DvaTransactionsPage() {
     return new URLSearchParams(window.location.search).get("userId") ?? "";
   });
   const [dateFrom, setDateFrom] = useState(() => {
-    if (typeof window === "undefined") return "";
-    return new URLSearchParams(window.location.search).get("dateFrom") ?? "";
+    if (typeof window === "undefined") return lagosToday();
+    return new URLSearchParams(window.location.search).get("dateFrom") ?? lagosToday();
   });
   const [dateTo, setDateTo] = useState(() => {
-    if (typeof window === "undefined") return "";
-    return new URLSearchParams(window.location.search).get("dateTo") ?? "";
+    if (typeof window === "undefined") return lagosToday();
+    return new URLSearchParams(window.location.search).get("dateTo") ?? lagosToday();
   });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -585,18 +621,21 @@ export function DvaTransactionsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Transactions</h1>
           <p className="mt-1 text-sm text-muted">
             Track successful inbound transfers into driver virtual accounts and reconcile by Nigeria-day ranges.
           </p>
         </div>
-        {isAdmin && (
-          <Button variant="secondary" onClick={openMaintenance} className="sm:shrink-0">
-            DVA maintenance
-          </Button>
-        )}
+        <div className="grid gap-2 sm:flex sm:items-center lg:justify-end">
+          <DateRangePicker from={dateFrom} to={dateTo} onApply={applyDateRange} align="end" className="sm:w-80" />
+          {isAdmin && (
+            <Button variant="secondary" onClick={openMaintenance} className="h-12 sm:shrink-0">
+              DVA maintenance
+            </Button>
+          )}
+        </div>
       </div>
 
       {notice && (
@@ -616,8 +655,7 @@ export function DvaTransactionsPage() {
 
       <section className="rounded-lg border border-border bg-surface shadow-card">
         <div className="space-y-3 border-b border-border p-4">
-          <div className="grid gap-3 xl:grid-cols-[minmax(18rem,0.9fr)_minmax(18rem,1.2fr)_auto_auto_auto] xl:items-end">
-            <DateRangePicker from={dateFrom} to={dateTo} onApply={applyDateRange} />
+          <div className="grid gap-3 lg:grid-cols-[minmax(18rem,1fr)_auto_auto_auto] lg:items-end">
             <label className="space-y-1.5 text-sm">
               <span className="font-medium">Search</span>
               <input value={search} onChange={(event) => { setSearch(event.target.value.slice(0, 200)); setPage(1); }} placeholder="Payer name, reference or narration" className="h-10 w-full rounded-lg border border-input bg-surface px-3 outline-none focus:border-brand focus:ring-3 focus:ring-brand/20" />
@@ -659,7 +697,7 @@ export function DvaTransactionsPage() {
           </div>
         )}
 
-        <div className="hidden overflow-x-auto md:block">
+        <div className="no-scrollbar hidden overflow-x-auto md:block">
           <table className="w-full min-w-[68rem] text-left text-sm">
             <thead className="bg-subtle/70 text-xs uppercase text-muted">
               <tr>
