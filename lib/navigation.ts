@@ -1,6 +1,13 @@
 import type { UserType } from "@/lib/api/types";
 
-export type NavIcon = "dashboard" | "profile" | "security" | "applications" | "transactions" | "fleet" | "configurations";
+export type NavIcon =
+  | "dashboard"
+  | "profile"
+  | "security"
+  | "applications"
+  | "transactions"
+  | "fleet"
+  | "configurations";
 
 export interface NavItem {
   label: string;
@@ -24,15 +31,35 @@ export const NAVIGATION: NavSection[] = [
   {
     items: [
       { label: "Dashboard", href: "/dashboard", icon: "dashboard" },
-      { label: "Driver applications", href: "/admin/driver-applications", icon: "applications", roles: ["ADMIN"] },
-      { label: "Transactions", href: "/dva-transactions", icon: "transactions", roles: ["ADMIN", "ACCOUNT_OFFICER", "RELATIONSHIP_OFFICER"] },
-      { label: "Fleet vehicles", href: "/fleet-vehicles", icon: "fleet", roles: ["ADMIN", "ACCOUNT_OFFICER", "RELATIONSHIP_OFFICER"] },
+      {
+        label: "Transactions",
+        href: "/dva-transactions",
+        icon: "transactions",
+        roles: ["ADMIN", "ACCOUNT_OFFICER", "RELATIONSHIP_OFFICER"],
+      },
+      {
+        label: "Fleet vehicles",
+        href: "/fleet-vehicles",
+        icon: "fleet",
+        roles: ["ADMIN", "ACCOUNT_OFFICER", "RELATIONSHIP_OFFICER"],
+      },
+      {
+        label: "Driver applications",
+        href: "/admin/driver-applications",
+        icon: "applications",
+        roles: ["ADMIN"],
+      },
     ],
   },
   {
     title: "Platform",
     items: [
-      { label: "Configurations", href: "/configurations", icon: "configurations", roles: ["ADMIN", "ACCOUNT_OFFICER", "RELATIONSHIP_OFFICER"] },
+      {
+        label: "Configurations",
+        href: "/configurations",
+        icon: "configurations",
+        roles: ["ADMIN", "ACCOUNT_OFFICER", "RELATIONSHIP_OFFICER"],
+      },
     ],
   },
   {
@@ -47,7 +74,9 @@ export const NAVIGATION: NavSection[] = [
 export function navigationFor(role: UserType): NavSection[] {
   return NAVIGATION.map((section) => ({
     ...section,
-    items: section.items.filter((item) => !item.roles || item.roles.includes(role)),
+    items: section.items.filter(
+      (item) => !item.roles || item.roles.includes(role),
+    ),
   })).filter((section) => section.items.length > 0);
 }
 
