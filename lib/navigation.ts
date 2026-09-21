@@ -25,7 +25,7 @@ export const NAVIGATION: NavSection[] = [
     items: [
       { label: "Dashboard", href: "/dashboard", icon: "dashboard" },
       { label: "Driver applications", href: "/admin/driver-applications", icon: "applications", roles: ["ADMIN"] },
-      { label: "DVA transactions", href: "/dva-transactions", icon: "transactions", roles: ["ADMIN", "ACCOUNT_OFFICER", "RELATIONSHIP_OFFICER"] },
+      { label: "Transactions", href: "/dva-transactions", icon: "transactions", roles: ["ADMIN", "ACCOUNT_OFFICER", "RELATIONSHIP_OFFICER"] },
       { label: "Fleet vehicles", href: "/fleet-vehicles", icon: "fleet", roles: ["ADMIN", "ACCOUNT_OFFICER", "RELATIONSHIP_OFFICER"] },
     ],
   },

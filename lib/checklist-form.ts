@@ -22,6 +22,12 @@ export const PROVIDER_LABEL: Record<AIProvider, string> = {
   OPENAI: "OpenAI",
 };
 
+export const AI_MODEL_OPTIONS: Record<AIProvider, readonly string[]> = {
+  DEEPSEEK: ["deepseek-chat", "deepseek-reasoner"],
+  GEMINI: ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"],
+  OPENAI: ["gpt-5", "gpt-5-mini", "gpt-4.1", "gpt-4.1-mini", "gpt-4o", "gpt-4o-mini"],
+};
+
 export const MIN_RADIUS = 20;
 export const MAX_RADIUS = 5000;
 export const DEFAULT_RADIUS = 200;

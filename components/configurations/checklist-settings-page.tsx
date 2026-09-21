@@ -20,6 +20,7 @@ import {
   PHASES,
   PHASE_LABEL,
   PROVIDER_LABEL,
+  AI_MODEL_OPTIONS,
   buildPatch,
   describeChanges,
   toForm,
@@ -41,6 +42,8 @@ const PHASE_BLURB: Record<Phase, string> = {
   drop_off: "When drivers hand their vehicle back each evening.",
 };
 
+const CUSTOM_MODEL = "__custom__";
+
 const nowInLagos = () =>
   new Intl.DateTimeFormat("en-GB", { timeZone: LAGOS, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date());
 
@@ -48,7 +51,7 @@ const timeInput =
   "h-10 w-full rounded-lg border bg-surface px-3 text-sm tabular-nums outline-none transition pointer-coarse:h-11 pointer-coarse:text-base focus:border-brand focus:ring-3 focus:ring-brand/20";
 
 function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <section className={`rounded-2xl border border-border bg-surface p-5 shadow-card sm:p-6 ${className}`}>{children}</section>;
+  return <section className={`rounded-lg border border-border bg-surface p-4 shadow-card sm:p-5 ${className}`}>{children}</section>;
 }
 
 function TimeField({ label, value, onChange, invalid }: { label: string; value: string; onChange: (value: string) => void; invalid: boolean }) {
@@ -87,10 +90,10 @@ function PhaseCard({
   const geofenced = saved[phase].location !== null;
 
   return (
-    <Card className="space-y-5">
+    <Card className="space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
-          <span aria-hidden className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand">
+          <span aria-hidden className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-brand">
             <Icon name={phase === "pick_up" ? "arrowUp" : "arrowDown"} className="size-5" />
           </span>
           <div className="min-w-0">
@@ -118,10 +121,74 @@ function PhaseCard({
 
 function SummaryTile({ label, children, sub }: { label: string; children: ReactNode; sub?: ReactNode }) {
   return (
-    <div className="min-w-0 rounded-xl bg-subtle/60 p-3.5">
+    <div className="min-w-0 rounded-lg bg-subtle/60 p-3.5">
       <dt className="text-xs text-muted">{label}</dt>
       <dd className="mt-1 break-words text-sm font-semibold">{children}</dd>
       {sub && <p className="mt-0.5 truncate text-xs text-muted">{sub}</p>}
+    </div>
+  );
+}
+
+function ModelPicker({
+  provider,
+  value,
+  inUse,
+  error,
+  onChange,
+}: {
+  provider: AIProvider;
+  value: string;
+  inUse: string;
+  error?: string;
+  onChange: (model: string) => void;
+}) {
+  const [customOpen, setCustomOpen] = useState(false);
+  const options = AI_MODEL_OPTIONS[provider];
+  const trimmed = value.trim();
+  const isCustom = customOpen || (trimmed !== "" && !options.includes(trimmed));
+  const selected = isCustom ? CUSTOM_MODEL : trimmed;
+
+  return (
+    <div className="space-y-2">
+      <Select
+        label="Model"
+        value={selected}
+        onChange={(event) => {
+          const next = event.target.value;
+          setCustomOpen(next === CUSTOM_MODEL);
+          if (next !== CUSTOM_MODEL) onChange(next);
+        }}
+        error={isCustom ? undefined : error}
+        hint="Choose a common model, keep the provider default, or use a custom override."
+        className="font-mono"
+      >
+        <option value="">Provider default ({inUse})</option>
+        {options.map((model) => (
+          <option key={model} value={model}>{model}</option>
+        ))}
+        <option value={CUSTOM_MODEL}>Custom model override...</option>
+      </Select>
+
+      {isCustom && (
+        <Field
+          label="Custom model override"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          error={error}
+          placeholder={options[0]}
+          hint="Use this when the exact model is not listed yet."
+          maxLength={100}
+          autoComplete="off"
+          spellCheck={false}
+          className="font-mono"
+        />
+      )}
+
+      {trimmed !== "" && (
+        <button type="button" onClick={() => { setCustomOpen(false); onChange(""); }} className="text-xs font-medium text-brand hover:underline pointer-coarse:py-2">
+          Reset to provider default
+        </button>
+      )}
     </div>
   );
 }
@@ -278,7 +345,7 @@ export function ChecklistSettingsPage() {
           </div>
         )}
 
-        <Card>
+        <Card className="bg-subtle/30">
           <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <SummaryTile label="Pick-up window">
               {baseline.pick_up.start_time.slice(0, 5)} – {baseline.pick_up.end_time.slice(0, 5)}
@@ -295,77 +362,72 @@ export function ChecklistSettingsPage() {
           </dl>
         </Card>
 
-        <div className="grid items-start gap-5 xl:grid-cols-2">
-          {PHASES.map((phase) => (
-            <PhaseCard
-              key={phase}
-              phase={phase}
-              form={form[phase]}
-              saved={baseline}
-              errors={errors}
-              onChange={(next) => edit({ ...form, [phase]: next })}
-            />
-          ))}
-        </div>
-
-        <div className="grid items-start gap-5 lg:grid-cols-2">
-          <Card className="space-y-4">
-            <div>
-              <h2 className="text-base font-semibold">Grace period</h2>
-              <p className="mt-0.5 text-sm text-muted">
-                How long after a window closes a driver can still finish a checklist they already started. It applies to checklists in progress right away.
-              </p>
+        <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(21rem,0.55fr)]">
+          <section className="space-y-3">
+            <div className="px-1">
+              <h2 className="text-base font-semibold">Schedule and location</h2>
+              <p className="mt-0.5 text-sm text-muted">Set the windows and optional geofences drivers must use for each checklist.</p>
             </div>
-            <Field
-              label="Grace period (minutes)"
-              inputMode="numeric"
-              value={form.grace}
-              onChange={(event) => edit({ ...form, grace: event.target.value.replace(/[^\d]/g, "").slice(0, 3) })}
-              error={errors.grace}
-              hint={`0 to ${MAX_GRACE} minutes.`}
-              trailing={<span className="pr-2 text-xs text-muted">min</span>}
-            />
-          </Card>
-
-          <Card className="space-y-4">
-            <div>
-              <h2 className="text-base font-semibold">AI photo analysis</h2>
-              <p className="mt-0.5 text-sm text-muted">Which vision model reads the checklist photos. It applies to analyses that run from now on.</p>
-            </div>
-            <Select
-              label="Provider"
-              value={form.provider}
-              onChange={(event) => edit({ ...form, provider: event.target.value as AIProvider })}
-            >
-              {(Object.keys(PROVIDER_LABEL) as AIProvider[]).map((provider) => (
-                <option key={provider} value={provider}>{PROVIDER_LABEL[provider]}</option>
+            <div className="grid items-start gap-5 2xl:grid-cols-2">
+              {PHASES.map((phase) => (
+                <PhaseCard
+                  key={phase}
+                  phase={phase}
+                  form={form[phase]}
+                  saved={baseline}
+                  errors={errors}
+                  onChange={(next) => edit({ ...form, [phase]: next })}
+                />
               ))}
-            </Select>
-            <div className="space-y-2">
-              <Field
-                label="Model override"
-                value={form.model}
-                onChange={(event) => edit({ ...form, model: event.target.value })}
-                error={errors.model}
-                placeholder={baseline.ai_model_in_use}
-                hint="Leave blank to use the provider's default model."
-                maxLength={100}
-                autoComplete="off"
-                spellCheck={false}
-                className="font-mono"
-              />
-              {form.model.trim() !== "" && (
-                <button type="button" onClick={() => edit({ ...form, model: "" })} className="text-xs font-medium text-brand hover:underline pointer-coarse:py-2">
-                  Reset to default
-                </button>
-              )}
             </div>
-            {providerChanged && (
-              <Alert tone="info">
-                The provider must be set up on the server. If it isn&apos;t, new photo analyses will fail. After switching, re-run a recent checklist to check it works.
-              </Alert>
-            )}
-          </Card>
+          </section>
+
+          <aside className="space-y-5">
+            <Card className="space-y-4">
+              <div>
+                <h2 className="text-base font-semibold">Rules</h2>
+                <p className="mt-0.5 text-sm text-muted">A small buffer for checklists already in progress.</p>
+              </div>
+              <Field
+                label="Grace period"
+                inputMode="numeric"
+                value={form.grace}
+                onChange={(event) => edit({ ...form, grace: event.target.value.replace(/[^\d]/g, "").slice(0, 3) })}
+                error={errors.grace}
+                hint={`0 to ${MAX_GRACE} minutes.`}
+                trailing={<span className="pr-2 text-xs text-muted">min</span>}
+              />
+            </Card>
+
+            <Card className="space-y-4">
+              <div>
+                <h2 className="text-base font-semibold">AI photo analysis</h2>
+                <p className="mt-0.5 text-sm text-muted">Choose the provider and model used for new checklist photo reviews.</p>
+              </div>
+              <Select
+                label="Provider"
+                value={form.provider}
+                onChange={(event) => edit({ ...form, provider: event.target.value as AIProvider, model: "" })}
+              >
+                {(Object.keys(PROVIDER_LABEL) as AIProvider[]).map((provider) => (
+                  <option key={provider} value={provider}>{PROVIDER_LABEL[provider]}</option>
+                ))}
+              </Select>
+              <ModelPicker
+                key={form.provider}
+                provider={form.provider}
+                value={form.model}
+                inUse={providerChanged ? AI_MODEL_OPTIONS[form.provider][0] : baseline.ai_model_in_use}
+                error={errors.model}
+                onChange={(model) => edit({ ...form, model })}
+              />
+              {providerChanged && (
+                <Alert tone="info">
+                  The provider must be set up on the server. If it isn&apos;t, new photo analyses will fail. After switching, re-run a recent checklist to check it works.
+                </Alert>
+              )}
+            </Card>
+          </aside>
         </div>
       </div>
 

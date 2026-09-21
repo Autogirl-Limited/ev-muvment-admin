@@ -21,8 +21,17 @@ import {
 
 interface GeocodeResult {
   display_name: string;
-  lat: string;
-  lon: string;
+  place_id: string;
+  main_text: string;
+  secondary_text: string;
+}
+
+interface PlaceDetailsResult {
+  result: {
+    address: string;
+    latitude: number;
+    longitude: number;
+  };
 }
 
 interface Props {
@@ -34,12 +43,23 @@ interface Props {
 
 const PAIR = /^\s*(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)\s*$/;
 
-/** OpenStreetMap embed centred on the pin, sized to the radius so the geofence area is in view. */
+const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+
+function zoomForRadius(radius: number) {
+  if (radius <= 80) return 18;
+  if (radius <= 180) return 17;
+  if (radius <= 400) return 16;
+  if (radius <= 900) return 15;
+  if (radius <= 1800) return 14;
+  if (radius <= 3500) return 13;
+  return 12;
+}
+
+/** Google Maps embed centred on the pin. The radius controls the zoom level so the geofence area stays readable. */
 function mapUrl(latitude: number, longitude: number, radius: number) {
-  const latDelta = Math.max(radius * 2.5, 300) / 111_320;
-  const lonDelta = latDelta / Math.max(Math.cos((latitude * Math.PI) / 180), 0.01);
-  const bbox = [longitude - lonDelta, latitude - latDelta, longitude + lonDelta, latitude + latDelta].map((n) => n.toFixed(6)).join(",");
-  return `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${latitude},${longitude}`;
+  if (!GOOGLE_MAPS_API_KEY || GOOGLE_MAPS_API_KEY === "changeme") return null;
+  const center = `${latitude.toFixed(6)},${longitude.toFixed(6)}`;
+  return `https://www.google.com/maps/embed/v1/place?key=${encodeURIComponent(GOOGLE_MAPS_API_KEY)}&q=${encodeURIComponent(center)}&zoom=${zoomForRadius(radius)}&maptype=roadmap`;
 }
 
 export function ChecklistLocationEditor({ phase, value, onChange, errors }: Props) {
@@ -69,32 +89,41 @@ export function ChecklistLocationEditor({ phase, value, onChange, errors }: Prop
     setSearching(true);
     setNotice(null);
     try {
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q=${encodeURIComponent(text)}`,
-        { signal: controller.signal, headers: { Accept: "application/json" } },
-      );
+      const response = await fetch(`/api/maps/places?input=${encodeURIComponent(text)}`, { signal: controller.signal });
       if (!response.ok) throw new Error("search failed");
-      const found = (await response.json()) as GeocodeResult[];
+      const payload = (await response.json()) as { results: GeocodeResult[] };
+      const found = payload.results;
       setResults(found);
       if (found.length === 0) setNotice("No places found. Try a nearby landmark, or enter the coordinates below.");
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
       setResults(null);
-      setNotice("Address search isn't available right now. You can still enter the coordinates yourself.");
+      setNotice("Google Maps place search isn't available right now. You can still enter the coordinates yourself.");
     } finally {
       if (abort.current === controller) setSearching(false);
     }
   };
 
-  const choose = (result: GeocodeResult) => {
-    onChange({
-      ...(value ?? emptyLocation()),
-      address: result.display_name.slice(0, 255),
-      latitude: Number(result.lat).toFixed(6),
-      longitude: Number(result.lon).toFixed(6),
-    });
-    setResults(null);
-    setQuery("");
+  const choose = async (result: GeocodeResult) => {
+    setSearching(true);
+    setNotice(null);
+    try {
+      const response = await fetch(`/api/maps/places?placeId=${encodeURIComponent(result.place_id)}`);
+      if (!response.ok) throw new Error("details failed");
+      const payload = (await response.json()) as PlaceDetailsResult;
+      onChange({
+        ...(value ?? emptyLocation()),
+        address: (payload.result.address || result.display_name).slice(0, 255),
+        latitude: payload.result.latitude.toFixed(6),
+        longitude: payload.result.longitude.toFixed(6),
+      });
+      setResults(null);
+      setQuery("");
+    } catch {
+      setNotice("Couldn't load that Google Maps place. Try another suggestion, or enter coordinates manually.");
+    } finally {
+      setSearching(false);
+    }
   };
 
   const useMyLocation = () => {
@@ -137,7 +166,7 @@ export function ChecklistLocationEditor({ phase, value, onChange, errors }: Prop
   }
 
   return (
-    <div className="space-y-4 rounded-xl border border-border p-4">
+    <div className="space-y-4 rounded-lg border border-border bg-surface p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-sm font-medium">{label} location</p>
@@ -174,10 +203,13 @@ export function ChecklistLocationEditor({ phase, value, onChange, errors }: Prop
         {results && results.length > 0 && (
           <ul className="animate-fade-in divide-y divide-border overflow-hidden rounded-xl border border-border">
             {results.map((result) => (
-              <li key={`${result.lat},${result.lon},${result.display_name}`}>
-                <button type="button" onClick={() => choose(result)} className="flex w-full items-start gap-2.5 px-3 py-2.5 text-left text-sm transition hover:bg-subtle">
+              <li key={result.place_id}>
+                <button type="button" onClick={() => choose(result)} className="flex w-full items-start gap-2.5 px-3 py-2.5 text-left text-sm transition hover:bg-subtle disabled:cursor-wait disabled:opacity-70" disabled={searching}>
                   <Icon name="mapPin" className="mt-0.5 size-4 shrink-0 text-muted" />
-                  <span className="min-w-0 break-words">{result.display_name}</span>
+                  <span className="min-w-0">
+                    <span className="block break-words font-medium">{result.main_text}</span>
+                    {result.secondary_text && <span className="block break-words text-xs text-muted">{result.secondary_text}</span>}
+                  </span>
                 </button>
               </li>
             ))}
@@ -261,20 +293,20 @@ export function ChecklistLocationEditor({ phase, value, onChange, errors }: Prop
 
       {validPin && mapSrc ? (
         <div className="space-y-1.5">
-          <div className="overflow-hidden rounded-xl border border-border bg-subtle">
+          <div className="overflow-hidden rounded-lg border border-border bg-subtle">
             <iframe
               key={mapSrc}
-              title={`${label} location on a map`}
+              title={`${label} location on Google Maps`}
               src={mapSrc}
               loading="lazy"
-              referrerPolicy="no-referrer"
+              referrerPolicy="no-referrer-when-downgrade"
               className="block h-52 w-full sm:h-64"
             />
           </div>
           <p className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
             <span>Pin at {latitude?.toFixed(5)}, {longitude?.toFixed(5)}, within {radius.toLocaleString("en-NG")} m</span>
             <a
-              href={`https://www.openstreetmap.org/?mlat=${latitude}&mlon=${longitude}#map=17/${latitude}/${longitude}`}
+              href={`https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-1 font-medium text-brand hover:underline"
@@ -285,8 +317,8 @@ export function ChecklistLocationEditor({ phase, value, onChange, errors }: Prop
           </p>
         </div>
       ) : (
-        <div className="flex h-24 items-center justify-center rounded-xl border border-dashed border-border text-sm text-muted">
-          Search a place or enter coordinates to preview the map
+        <div className="flex h-24 items-center justify-center rounded-lg border border-dashed border-border px-4 text-center text-sm text-muted">
+          {validPin ? "Add a Google Maps API key to preview the map." : "Search a place or enter coordinates to preview the map."}
         </div>
       )}
     </div>

@@ -311,7 +311,7 @@ export function DvaTransactionsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="DVA transactions"
+        title="Transactions"
         description="Track successful inbound transfers into driver virtual accounts, reconcile by Nigeria-day ranges, and maintain DVAs when provider records drift."
       />
 
@@ -416,7 +416,7 @@ export function DvaTransactionsPage() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-muted">No DVA transactions match these filters.</td>
+                  <td colSpan={6} className="px-4 py-12 text-center text-muted">No transactions match these filters.</td>
                 </tr>
               )}
             </tbody>
