@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
 import { AccessDenied } from "@/components/dashboard/access-denied";
 import { ConfigPageHeader, EmptyState, ErrorState, Icon, IconButton, SearchInput, SkeletonRows } from "@/components/dashboard/screen-kit";
@@ -17,6 +17,7 @@ import { formatDate, fullName } from "@/lib/format";
 import { useSearchState, useUrlState } from "@/lib/hooks/use-url-state";
 import { locationSuggestions } from "@/lib/locations";
 import { useMakeOptions, useModelOptions, useTypeOptions } from "@/lib/query/catalogue";
+import { CACHE } from "@/lib/query/cache";
 import { queryKeys } from "@/lib/query/keys";
 import { useCurrentUser } from "@/lib/query/user";
 
@@ -90,7 +91,8 @@ export function FleetVehiclesPage() {
     enabled: isStaff,
     // Staff get no push events for vehicle changes, so pick up colleagues' edits while the page is open.
     refetchInterval: 60_000,
-    staleTime: 15_000,
+    placeholderData: keepPreviousData,
+    ...CACHE.live,
   });
 
   const items = vehicles.data?.items;

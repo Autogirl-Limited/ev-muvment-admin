@@ -67,6 +67,32 @@ const PATHS = {
       <path d="M12 7v5l3 2" />
     </>
   ),
+  clipboard: (
+    <>
+      <rect x="6" y="4" width="12" height="17" rx="2" />
+      <path d="M9 4h6v3H9zM9 12l2 2 4-4M9 17h6" />
+    </>
+  ),
+  users: (
+    <>
+      <circle cx="9" cy="8" r="3.5" />
+      <path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.4c2 .7 3.5 2.6 3.5 5.6" />
+    </>
+  ),
+  mapPin: (
+    <>
+      <path d="M12 21s7-6.2 7-11.5a7 7 0 0 0-14 0C5 14.8 12 21 12 21Z" />
+      <circle cx="12" cy="9.5" r="2.5" />
+    </>
+  ),
+  crosshair: (
+    <>
+      <circle cx="12" cy="12" r="7" />
+      <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
+    </>
+  ),
+  check: <path d="m5 12 4 4L19 6" />,
+  external: <path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />,
   arrowUp: <path d="M12 19V5m-6 6 6-6 6 6" />,
   arrowDown: <path d="M12 5v14m-6-6 6 6 6-6" />,
 } as const;
@@ -88,6 +114,8 @@ export function ConfigPageHeader({
   icon,
   actions,
   showBackLink = true,
+  backHref = "/configurations",
+  backLabel = "Configurations",
 }: {
   title: string;
   description?: ReactNode;
@@ -95,16 +123,18 @@ export function ConfigPageHeader({
   actions?: ReactNode;
   /** Link back to the Configurations hub. Off for top-level screens such as Fleet vehicles. */
   showBackLink?: boolean;
+  backHref?: string;
+  backLabel?: string;
 }) {
   return (
     <header className="mb-6 space-y-4">
       {showBackLink && (
         <Link
-          href="/configurations"
+          href={backHref}
           className="inline-flex items-center gap-1.5 rounded-md py-1 text-sm font-medium text-muted transition hover:text-foreground pointer-coarse:py-2"
         >
           <Icon name="arrowLeft" className="size-4" />
-          Configurations
+          {backLabel}
         </Link>
       )}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

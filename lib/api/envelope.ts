@@ -41,9 +41,11 @@ export function toResult<T>(
 
   const fieldErrors: Record<string, string> = {};
   for (const detail of envelope?.error?.details ?? []) {
-    // Pydantic locations can arrive prefixed ("body.identifier").
-    const field = detail.field.split(".").pop() ?? detail.field;
-    fieldErrors[field] ??= detail.issue;
+    // Pydantic locations can arrive prefixed ("body.identifier"). Nested paths
+    // ("pick_up.location.latitude") are kept whole, and also by last segment.
+    const path = detail.field.replace(/^(body|query|path)\./, "");
+    fieldErrors[path] ??= detail.issue;
+    fieldErrors[path.split(".").pop() ?? path] ??= detail.issue;
   }
 
   // Server-side faults carry internal wording; keep the UI message generic.

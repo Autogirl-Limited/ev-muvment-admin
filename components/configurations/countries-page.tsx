@@ -15,13 +15,14 @@ import { Pagination } from "@/components/ui/pagination";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/toast";
 import { ApiError } from "@/lib/api/browser";
-import { createCountry, deleteCountry, diff, listCountries, updateCountry, type Country, type CountryInput } from "@/lib/api/configuration";
+import { createCountry, deleteCountry, diff, updateCountry, type Country, type CountryInput } from "@/lib/api/configuration";
 import type { Paginated } from "@/lib/api/staff";
 import { useSearchState, useUrlState } from "@/lib/hooks/use-url-state";
+import { LIST_PAGE_SIZE } from "@/lib/query/cache";
+import { configQueries } from "@/lib/query/configuration";
 import { queryKeys } from "@/lib/query/keys";
 import { useCurrentUser } from "@/lib/query/user";
 
-const PAGE_SIZE = 20;
 const CONTINENTS = ["Africa", "Antarctica", "Asia", "Europe", "North America", "Oceania", "South America"];
 const ROW_GRID = "md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1.2fr)_4.5rem_6rem]";
 
@@ -178,12 +179,9 @@ export function CountriesPage() {
   const [removing, setRemoving] = useState<Country | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
 
-  const filters = { page: url.page, page_size: PAGE_SIZE, searchTerm: search.committed || undefined };
   const countries = useQuery({
-    queryKey: queryKeys.countries.list(filters),
-    queryFn: ({ signal }) => listCountries(filters, signal),
+    ...configQueries.countries({ page: url.page, page_size: LIST_PAGE_SIZE, searchTerm: search.committed || undefined }),
     enabled: isStaff,
-    staleTime: 30_000,
   });
 
   // Landing past the last page (e.g. after deleting its only row) falls back to page 1.

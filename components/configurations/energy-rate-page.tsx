@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { AccessDenied } from "@/components/dashboard/access-denied";
 import { ConfigPageHeader, EmptyState, ErrorState, Icon, SkeletonRows } from "@/components/dashboard/screen-kit";
@@ -12,10 +12,12 @@ import { Modal, ModalActions } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
 import { useToast } from "@/components/ui/toast";
 import { ApiError } from "@/lib/api/browser";
-import { getCurrentEnergyRate, getStaffMember, listEnergyRates, setEnergyRate, type EnergyRate } from "@/lib/api/configuration";
-import { formatDateTime, fullName, naira } from "@/lib/format";
+import { setEnergyRate, type EnergyRate } from "@/lib/api/configuration";
+import { formatDateTime, naira } from "@/lib/format";
 import { useUrlState } from "@/lib/hooks/use-url-state";
+import { configQueries } from "@/lib/query/configuration";
 import { queryKeys } from "@/lib/query/keys";
+import { useStaffNames } from "@/lib/query/staff-names";
 import { useCurrentUser } from "@/lib/query/user";
 
 const PAGE_SIZE = 15;
@@ -40,25 +42,6 @@ function ChangePill({ change }: { change: number | null }) {
       {Math.abs(change).toLocaleString("en-NG", { maximumFractionDigits: 1 })}%
     </span>
   );
-}
-
-function useStaffNames(ids: (string | null)[], enabled: boolean) {
-  const unique = [...new Set(ids.filter((id): id is string => Boolean(id)))];
-  const results = useQueries({
-    queries: unique.map((id) => ({
-      queryKey: queryKeys.users.detail(id),
-      queryFn: ({ signal }: { signal: AbortSignal }) => getStaffMember(id, signal),
-      enabled,
-      staleTime: Infinity,
-      retry: false,
-    })),
-  });
-  const names = new Map<string, string>();
-  unique.forEach((id, index) => {
-    const person = results[index]?.data;
-    if (person) names.set(id, fullName(person));
-  });
-  return (id: string | null) => (id === null ? "System (initial)" : (names.get(id) ?? "An administrator"));
 }
 
 function CurrentRateCard({ rate, setByName }: { rate: EnergyRate; setByName: string }) {
@@ -188,21 +171,17 @@ export function EnergyRatePage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const current = useQuery({
-    queryKey: queryKeys.energyRate.current,
-    queryFn: ({ signal }) => getCurrentEnergyRate(signal),
+    ...configQueries.energyRate(),
     enabled: isStaff,
     // The API has no push for staff without a socket, so poll while the page is open.
     refetchInterval: 60_000,
   });
 
-  const history = useQuery({
-    queryKey: queryKeys.energyRate.history(page),
-    queryFn: ({ signal }) => listEnergyRates({ page, page_size: PAGE_SIZE }, signal),
-    enabled: isAdmin,
-  });
+  const history = useQuery({ ...configQueries.energyHistory(page, PAGE_SIZE), enabled: isAdmin });
 
   const items = history.data?.items;
-  const names = useStaffNames([current.data?.set_by ?? null, ...(items?.map((row) => row.set_by) ?? [])], isAdmin);
+  const nameOf = useStaffNames([current.data?.set_by, ...(items?.map((row) => row.set_by) ?? [])], isAdmin);
+  const names = (id: string | null) => (id === null ? "System (initial)" : (nameOf(id) ?? "An administrator"));
 
   const save = useMutation({
     mutationFn: (rate: number) => setEnergyRate(rate),

@@ -20,9 +20,7 @@ import {
   createVehicleModel,
   deleteCatalogueEntry,
   deleteVehicleModel,
-  listVehicleMakes,
   listVehicleModels,
-  listVehicleTypes,
   listVehicles,
   renameCatalogueEntry,
   updateVehicleModel,
@@ -33,11 +31,11 @@ import {
 } from "@/lib/api/configuration";
 import { formatDate, sameName } from "@/lib/format";
 import { useSearchState, useUrlState } from "@/lib/hooks/use-url-state";
+import { CACHE, LIST_PAGE_SIZE } from "@/lib/query/cache";
 import { useMakeOptions, useModelOptions, useTypeOptions } from "@/lib/query/catalogue";
+import { configQueries } from "@/lib/query/configuration";
 import { queryKeys } from "@/lib/query/keys";
 import { useCurrentUser } from "@/lib/query/user";
-
-const PAGE_SIZE = 20;
 
 type Tab = "types" | "makes" | "models";
 
@@ -64,7 +62,7 @@ function useUsage(target: { tab: Tab; id: string } | null) {
   return useQuery({
     queryKey: queryKeys.vehicles.count({ usage: target }),
     enabled: target !== null,
-    staleTime: 0,
+    staleTime: CACHE.live.staleTime,
     queryFn: async ({ signal }) => {
       if (!target) return 0;
       if (target.tab === "makes") {
@@ -280,26 +278,13 @@ export function VehicleCataloguePage() {
   const [editing, setEditing] = useState<Editing | null>(null);
   const [removing, setRemoving] = useState<Removing | null>(null);
 
-  const params = { page: url.page, page_size: PAGE_SIZE, searchTerm: search.committed || undefined };
+  const params = { page: url.page, page_size: LIST_PAGE_SIZE, searchTerm: search.committed || undefined };
 
-  const types = useQuery({
-    queryKey: queryKeys.vehicleTypes.list(params),
-    queryFn: ({ signal }) => listVehicleTypes(params, signal),
-    enabled: isStaff && tab === "types",
-    staleTime: 15_000,
-  });
-  const makes = useQuery({
-    queryKey: queryKeys.vehicleMakes.list(params),
-    queryFn: ({ signal }) => listVehicleMakes(params, signal),
-    enabled: isStaff && tab === "makes",
-    staleTime: 15_000,
-  });
-  const modelParams = { ...params, vehicleMakeId: makeFilter || undefined };
+  const types = useQuery({ ...configQueries.types(params), enabled: isStaff && tab === "types" });
+  const makes = useQuery({ ...configQueries.makes(params), enabled: isStaff && tab === "makes" });
   const models = useQuery({
-    queryKey: queryKeys.vehicleModels.list(modelParams),
-    queryFn: ({ signal }) => listVehicleModels(modelParams, signal),
+    ...configQueries.models({ ...params, vehicleMakeId: makeFilter || undefined }),
     enabled: isStaff && tab === "models",
-    staleTime: 15_000,
   });
   const makeOptions = useMakeOptions(isStaff && tab === "models");
 

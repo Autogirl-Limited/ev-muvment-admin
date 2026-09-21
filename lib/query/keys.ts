@@ -53,10 +53,18 @@ export const queryKeys = {
     all: ["countries"] as const,
     list: (filters: unknown) => ["countries", "list", filters] as const,
   },
+  /** The single global checklist configuration (`GET /checklist-settings`). */
+  checklistSettings: ["checklist-settings"] as const,
+  groups: {
+    all: ["groups"] as const,
+    list: (filters: unknown) => ["groups", "list", filters] as const,
+    detail: (id: string) => ["groups", "detail", id] as const,
+  },
   users: {
     all: ["users"] as const,
     drivers: (searchTerm: string) => ["users", "drivers", searchTerm] as const,
     assignableDrivers: (searchTerm: string) => ["users", "assignable-drivers", searchTerm] as const,
     detail: (id: string) => ["users", "detail", id] as const,
+    search: (searchTerm: string) => ["users", "search", searchTerm] as const,
   },
 };

@@ -1,20 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { AccessDenied } from "@/components/dashboard/access-denied";
 import { Badge } from "@/components/ui/badge";
 import { Icon, type IconName } from "@/components/dashboard/screen-kit";
-import {
-  getCurrentEnergyRate,
-  listCountries,
-  listVehicleMakes,
-  listVehicleModels,
-  listVehicleTypes,
-} from "@/lib/api/configuration";
 import { naira } from "@/lib/format";
-import { queryKeys } from "@/lib/query/keys";
+import { LIST_PAGE_SIZE } from "@/lib/query/cache";
+import { configQueries } from "@/lib/query/configuration";
 import { useCurrentUser } from "@/lib/query/user";
 
 interface Stat {
@@ -29,6 +23,7 @@ function ConfigCard({
   description,
   stats,
   badge,
+  onWarm,
 }: {
   href: string;
   icon: IconName;
@@ -36,10 +31,15 @@ function ConfigCard({
   description: string;
   stats: Stat[];
   badge?: string;
+  /** Called on hover/focus/touch so a card can warm data the hub doesn't load itself. */
+  onWarm?: () => void;
 }) {
   return (
     <Link
       href={href}
+      onMouseEnter={onWarm}
+      onFocus={onWarm}
+      onTouchStart={onWarm}
       className="group relative flex flex-col overflow-hidden rounded-2xl border border-border bg-surface p-5 shadow-card transition duration-200 hover:-translate-y-0.5 hover:border-brand/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand sm:p-6"
     >
       {/* Soft brand wash that brightens on hover. */}
@@ -84,31 +84,21 @@ export function ConfigurationsHub() {
   const isAdmin = user.user_type === "ADMIN";
   const isStaff = isAdmin || user.user_type === "ACCOUNT_OFFICER" || user.user_type === "RELATIONSHIP_OFFICER";
 
-  const types = useQuery({
-    queryKey: queryKeys.vehicleTypes.list({ page_size: 1 }),
-    queryFn: ({ signal }) => listVehicleTypes({ page: 1, page_size: 1 }, signal),
-    enabled: isStaff,
-  });
-  const makes = useQuery({
-    queryKey: queryKeys.vehicleMakes.list({ page_size: 1 }),
-    queryFn: ({ signal }) => listVehicleMakes({ page: 1, page_size: 1 }, signal),
-    enabled: isStaff,
-  });
-  const models = useQuery({
-    queryKey: queryKeys.vehicleModels.list({ page_size: 1 }),
-    queryFn: ({ signal }) => listVehicleModels({ page: 1, page_size: 1 }, signal),
-    enabled: isStaff,
-  });
-  const rate = useQuery({
-    queryKey: queryKeys.energyRate.current,
-    queryFn: ({ signal }) => getCurrentEnergyRate(signal),
-    enabled: isStaff,
-  });
-  const countries = useQuery({
-    queryKey: queryKeys.countries.list({ page_size: 1 }),
-    queryFn: ({ signal }) => listCountries({ page: 1, page_size: 1 }, signal),
-    enabled: isStaff,
-  });
+  // Same options the screens use, so these requests double as prefetches: opening a card reads warm cache.
+  const first = { page: 1, page_size: LIST_PAGE_SIZE };
+  const types = useQuery({ ...configQueries.types(first), enabled: isStaff });
+  const makes = useQuery({ ...configQueries.makes(first), enabled: isStaff });
+  const models = useQuery({ ...configQueries.models(first), enabled: isStaff });
+  const rate = useQuery({ ...configQueries.energyRate(), enabled: isStaff });
+  const countries = useQuery({ ...configQueries.countries(first), enabled: isStaff });
+  const checklist = useQuery({ ...configQueries.checklistSettings(), enabled: isStaff });
+  const groups = useQuery({ ...configQueries.groups(first), enabled: isStaff });
+
+  // Data only admins can read is warmed when a card is hovered or focused.
+  const queryClient = useQueryClient();
+  const warmEnergyHistory = () => {
+    if (isAdmin) queryClient.prefetchQuery(configQueries.energyHistory(1, 15));
+  };
 
   if (!isStaff) return <AccessDenied />;
 
@@ -118,7 +108,7 @@ export function ConfigurationsHub() {
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Configurations</h1>
         <p className="mt-2 text-sm leading-relaxed text-muted sm:text-base">
           Everything that shapes how the platform runs: the vehicle catalogue drivers pick from, what a kilowatt-hour
-          costs, and the countries you operate in.
+          costs, how daily checklists run, who gets payment alerts, and the countries you operate in.
         </p>
       </header>
 
@@ -135,6 +125,24 @@ export function ConfigurationsHub() {
           ]}
         />
         <ConfigCard
+          href="/configurations/checklist-settings"
+          icon="clipboard"
+          title="Checklist settings"
+          description="Set when drivers can start their daily pick-up and drop-off checklists, where they must be, and which AI reads the photos."
+          stats={[
+            { label: "Pick-up", value: checklist.data ? `${checklist.data.pick_up.start_time.slice(0, 5)}–${checklist.data.pick_up.end_time.slice(0, 5)}` : undefined },
+            { label: "Drop-off", value: checklist.data ? `${checklist.data.drop_off.start_time.slice(0, 5)}–${checklist.data.drop_off.end_time.slice(0, 5)}` : undefined },
+          ]}
+        />
+        <ConfigCard
+          href="/configurations/groups"
+          icon="users"
+          title="Groups"
+          description="Named lists of people, including the Accounts Team that receives live payment alerts. Create groups and manage who is in them."
+          stats={[{ label: "Groups", value: total(groups.data) }]}
+        />
+        <ConfigCard
+          onWarm={warmEnergyHistory}
           href="/configurations/energy-rate"
           icon="bolt"
           title="Energy rate"

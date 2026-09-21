@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { EmptyState, Icon } from "@/components/dashboard/screen-kit";
 import { Alert } from "@/components/ui/alert";
@@ -23,6 +23,7 @@ import {
 } from "@/lib/api/configuration";
 import { formatDateTime, fullName } from "@/lib/format";
 import { useDebounced } from "@/lib/hooks/use-debounced";
+import { CACHE } from "@/lib/query/cache";
 import { queryKeys } from "@/lib/query/keys";
 
 export function PlateChip({ plate }: { plate: string }) {
@@ -158,7 +159,8 @@ export function AssignDriverDialog({ vehicle, onClose }: { vehicle: Vehicle | nu
     queryKey: queryKeys.users.assignableDrivers(term.trim()),
     queryFn: ({ signal }) => listDriverOptions(term, signal),
     enabled: vehicle !== null,
-    staleTime: 0,
+    staleTime: CACHE.live.staleTime,
+    placeholderData: keepPreviousData,
   });
 
   const items = [...(drivers.data?.items ?? [])].sort((a, b) => Number(Boolean(driverBlocker(a))) - Number(Boolean(driverBlocker(b))));
@@ -312,7 +314,8 @@ export function ReassignDialog({ vehicle, onClose }: { vehicle: Vehicle | null; 
     queryKey: queryKeys.vehicles.list({ reassign: true, term: term.trim() }),
     queryFn: ({ signal }) => listVehicles({ page: 1, page_size: 50, assigned: false, searchTerm: term.trim() || undefined }, signal),
     enabled: vehicle !== null,
-    staleTime: 0,
+    staleTime: CACHE.live.staleTime,
+    placeholderData: keepPreviousData,
   });
   const candidates = (free.data?.items ?? []).filter((item) => item.id !== vehicle?.id);
   const target = candidates.find((item) => item.id === targetId);
