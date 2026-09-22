@@ -13,6 +13,15 @@
 export const queryKeys = {
   /** The signed-in staff member (`GET /users/me`). */
   me: ["me"] as const,
+  dashboard: {
+    all: ["dashboard"] as const,
+    overview: ["dashboard", "overview"] as const,
+    financialSummary: (filters: unknown) => ["dashboard", "financial-summary", filters] as const,
+    needsAttention: ["dashboard", "needs-attention"] as const,
+    allocationsByStatus: (filters: unknown) => ["dashboard", "allocations-by-status", filters] as const,
+    vehicleCondition: ["dashboard", "vehicle-condition"] as const,
+    moneyTrend: (filters: unknown) => ["dashboard", "money-trend", filters] as const,
+  },
   driverApplications: {
     all: ["driver-applications"] as const,
     list: (filters: unknown) => ["driver-applications", "list", filters] as const,

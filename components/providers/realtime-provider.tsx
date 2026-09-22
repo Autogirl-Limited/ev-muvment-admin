@@ -49,6 +49,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
         case "dva_transaction.created": {
           const tx = data as DvaTransaction;
           queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
+          queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
           if (!seenDvaIds.current.has(tx.id)) {
             seenDvaIds.current.add(tx.id);
             toast.info(`${naira(tx.amount)} received${tx.payer_name ? ` from ${tx.payer_name}` : ""}.`);
@@ -88,6 +89,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
           const allocation = data as WalletAllocation;
           if (allocation?.id) queryClient.setQueryData(queryKeys.walletAllocations.detail(allocation.id), allocation);
           queryClient.invalidateQueries({ queryKey: queryKeys.walletAllocations.all });
+          queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
           queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
           toast.info(
             allocation?.status === "AWAITING_ALLOCATION"
