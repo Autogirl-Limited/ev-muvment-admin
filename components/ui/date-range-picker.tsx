@@ -195,7 +195,7 @@ export function DateRangePicker({ from, to, onApply, align = "start", className 
       </button>
 
       {open && (
-        <div role="dialog" aria-label="Choose date range" className={`absolute left-0 right-0 z-20 mt-2 overflow-hidden rounded-xl border border-border bg-surface shadow-card sm:w-[42rem] ${panelAlign}`}>
+        <div role="dialog" aria-label="Choose date range" className={`absolute left-0 right-0 z-20 mt-2 overflow-hidden rounded-xl border border-border bg-surface shadow-card sm:w-[min(42rem,calc(100vw-2rem))] ${panelAlign}`}>
           <div className="grid gap-0 sm:grid-cols-[12rem_minmax(0,1fr)]">
             <div className="border-b border-border bg-subtle/50 p-3 sm:border-b-0 sm:border-r">
               <p className="px-1 text-xs font-semibold uppercase text-muted">Quick ranges</p>

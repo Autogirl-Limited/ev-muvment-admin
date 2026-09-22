@@ -107,7 +107,7 @@ function HeroMetric({ label, value, detail, icon }: { label: string; value: stri
 
 function OverviewGrid({ overview }: { overview: Overview }) {
   return (
-    <div className="grid w-full min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid w-full min-w-0 grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-4">
       <HeroMetric
         icon="users"
         label="Drivers"
@@ -149,7 +149,7 @@ function ChangeBadge({ metric }: { metric: Metric }) {
 
 function FinancialCards({ summary }: { summary: FinancialSummary }) {
   return (
-    <div className="grid w-full min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+    <div className="grid w-full min-w-0 grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
       {summary.metrics.map((metric) => (
         <CardShell key={metric.key} className="p-4">
           <div className="flex items-start justify-between gap-2">
@@ -221,7 +221,7 @@ function HeaderControls({
   onRefresh: () => void;
 }) {
   return (
-    <div className="flex w-full min-w-0 flex-col gap-2 sm:w-auto sm:flex-row sm:items-start sm:justify-end">
+    <div className="flex w-full min-w-0 flex-col gap-2 md:w-auto md:flex-row md:items-start md:justify-end">
       <DateRangePicker
         compact
         allowAll={false}
@@ -229,13 +229,13 @@ function HeaderControls({
         from={range.dateFrom}
         to={range.dateTo}
         onApply={({ from, to }) => onRange({ dateFrom: from, dateTo: to })}
-        className="w-full min-w-0 sm:w-80"
+        className="w-full min-w-0 md:w-80"
       />
-      <Button variant="secondary" onClick={onRefresh} fullWidth className="shrink-0 sm:w-auto">
+      <Button variant="secondary" onClick={onRefresh} fullWidth className="shrink-0 md:w-auto">
         <Icon name="refresh" className="size-4" />
         Refresh
       </Button>
-      {error && <p className="text-sm font-medium text-danger sm:basis-full sm:text-right">{error}</p>}
+      {error && <p className="text-sm font-medium text-danger md:basis-full md:text-right">{error}</p>}
     </div>
   );
 }
@@ -259,7 +259,7 @@ function DonutChart({ title, chart, totalLabel }: { title: string; chart: PieCha
         </div>
         <Badge tone="neutral">{formatNumber(chart.total)}</Badge>
       </div>
-      <div className="mt-4 grid w-full min-w-0 grid-cols-1 gap-4 sm:grid-cols-[12rem_minmax(0,1fr)] sm:items-center">
+      <div className="mt-4 grid w-full min-w-0 grid-cols-1 gap-4 md:grid-cols-[12rem_minmax(0,1fr)] md:items-center">
         <div className="relative mx-auto size-44">
           <svg viewBox="0 0 120 120" className="size-full -rotate-90" role="img" aria-label={title}>
             <circle cx="60" cy="60" r={radius} fill="none" stroke="var(--subtle)" strokeWidth="18" />
@@ -311,7 +311,7 @@ function TrendChart({ trend }: { trend: TimeSeries }) {
 
   return (
     <CardShell className="p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
           <h2 className="text-base font-semibold">Money trend</h2>
           <p className="mt-1 text-sm text-muted">{formatDate(trend.date_from)} to {formatDate(trend.date_to)}</p>
@@ -325,7 +325,7 @@ function TrendChart({ trend }: { trend: TimeSeries }) {
         </div>
       </div>
       <div className="mt-4 w-full min-w-0 overflow-x-auto">
-        <svg viewBox={`0 0 ${width} ${height}`} className="h-72 min-w-[42rem] w-full" role="img" aria-label="Money trend chart">
+        <svg viewBox={`0 0 ${width} ${height}`} className="h-64 min-w-[34rem] w-full sm:h-72 sm:min-w-[42rem]" role="img" aria-label="Money trend chart">
           {yTicks.map((tick) => (
             <g key={tick}>
               <line x1={pad.left} x2={width - pad.right} y1={y(tick)} y2={y(tick)} stroke="var(--border)" strokeDasharray="4 6" />
@@ -404,11 +404,11 @@ export function DashboardPage() {
         <ErrorState message={error instanceof Error ? error.message : "Dashboard data could not be loaded."} onRetry={refresh} />
       ) : isLoading(allQueries) ? (
         <div className="w-full min-w-0 space-y-4">
-          <div className="grid w-full min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid w-full min-w-0 grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-4">
             {Array.from({ length: 4 }).map((_, index) => <LoadingBlock key={index} className="h-32" />)}
           </div>
           <LoadingBlock className="h-72" />
-          <div className="grid w-full min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
+          <div className="grid w-full min-w-0 grid-cols-1 gap-4 2xl:grid-cols-2">
             <LoadingBlock className="h-80" />
             <LoadingBlock className="h-80" />
           </div>
@@ -416,14 +416,14 @@ export function DashboardPage() {
       ) : (
         <>
           {overview && <OverviewGrid overview={overview} />}
-          <div className="grid w-full min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]">
+          <div className="grid w-full min-w-0 grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1fr)_24rem]">
             <div className="w-full min-w-0 space-y-4">
               {summary && <FinancialCards summary={summary} />}
               {trend && <TrendChart trend={trend} />}
             </div>
             {attention && <AttentionFeed attention={attention.items} isAdmin={isAdmin} />}
           </div>
-          <div className="grid w-full min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
+          <div className="grid w-full min-w-0 grid-cols-1 gap-4 2xl:grid-cols-2">
             {allocations && <DonutChart title="Allocations by status" chart={allocations} totalLabel="Wallet allocation count" />}
             {condition && <DonutChart title="Vehicle condition" chart={condition} totalLabel="Latest checklist verdict" />}
           </div>
