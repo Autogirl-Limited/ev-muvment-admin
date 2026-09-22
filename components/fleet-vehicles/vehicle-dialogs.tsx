@@ -598,7 +598,6 @@ export function VehicleDetails({ id, isAdmin, onClose, onEdit, onAssign, onUnass
 
           <dl className="grid gap-3 sm:grid-cols-2">
             <Fact label="Location">{vehicle.location_state}</Fact>
-            <Fact label="State">{vehicle.state ? vehicle.state.name : <span className="text-muted">None (follows global default)</span>}</Fact>
             <Fact label="Type">{vehicle.vehicle_type.name}</Fact>
             <Fact label="Make">{vehicle.vehicle_make.name}</Fact>
             <Fact label="Model">{vehicle.vehicle_model.name}</Fact>
@@ -637,8 +636,8 @@ export function VehicleDetails({ id, isAdmin, onClose, onEdit, onAssign, onUnass
               <div>
                 <p className="text-xs font-medium uppercase text-muted">Checklist schedule</p>
                 <p className="mt-1 text-sm text-muted">
-                  Base schedule: <strong className="font-medium text-foreground">{vehicle.state ? vehicle.state.name : "Global default"}</strong>. Custom rows
-                  below override that for this vehicle standingly.
+                  Base schedule: <strong className="font-medium text-foreground">{vehicle.state ? vehicle.state.name : vehicle.location_state}</strong>&apos;s
+                  own schedule if set, else the global default. Custom rows below override that for this vehicle standingly.
                 </p>
               </div>
               <Button variant="secondary" className="py-3" onClick={() => setEditingSchedule(true)}>Edit schedule</Button>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { Icon } from "@/components/dashboard/screen-kit";
@@ -19,10 +19,71 @@ import {
   updateVehicle,
   type Vehicle,
 } from "@/lib/api/configuration";
+import { createState, type State } from "@/lib/api/states";
 import { sameName } from "@/lib/format";
 import { configQueries } from "@/lib/query/configuration";
 import { useMakeOptions, useModelOptions, useTypeOptions } from "@/lib/query/catalogue";
 import { queryKeys } from "@/lib/query/keys";
+
+/** "Can't find it? Add it here": creates a new location (a State, behind the scenes) without leaving the vehicle form. */
+function AddNewLocation({ existing, defaultCountryId, onCreated }: { existing: State[]; defaultCountryId: string | undefined; onCreated: (state: State) => void }) {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const create = useMutation({
+    mutationFn: (clean: string) => createState({ country_id: defaultCountryId!, name: clean }),
+    onSuccess: (created) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.states.all });
+      toast.success(`${created.name} added.`);
+      setOpen(false);
+      setName("");
+      onCreated(created);
+    },
+    onError: (err) => setError(err instanceof ApiError && err.status === 409 ? "That location already exists." : err instanceof ApiError ? err.message : "Couldn't add it."),
+  });
+
+  const submit = () => {
+    const clean = name.trim();
+    if (!clean) return setError("Enter a location name.");
+    if (!defaultCountryId) return setError("No country is configured yet — add one from Configurations > Countries first.");
+    const duplicate = existing.find((item) => sameName(item.name, clean));
+    // Reuse rather than create a look-alike ("lagos" vs "Lagos").
+    if (duplicate) return onCreated(duplicate), setOpen(false), setName("");
+    create.mutate(clean);
+  };
+
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-1 rounded-md py-0.5 text-xs font-medium text-brand hover:underline pointer-coarse:py-2">
+        <Icon name="plus" className="size-3.5" />
+        Add a new location
+      </button>
+    );
+  }
+
+  return (
+    <div className="animate-fade-in space-y-2 rounded-xl border border-border bg-subtle/60 p-3">
+      <Field
+        label="New location name"
+        value={name}
+        onChange={(event) => { setName(event.target.value); setError(null); }}
+        onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); submit(); } }}
+        error={error ?? undefined}
+        placeholder="Ogun"
+        maxLength={100}
+        autoComplete="off"
+        autoFocus
+      />
+      <div className="flex justify-end gap-2">
+        <Button variant="ghost" onClick={() => { setOpen(false); setName(""); setError(null); }} disabled={create.isPending}>Cancel</Button>
+        <Button variant="secondary" onClick={submit} loading={create.isPending}>Add location</Button>
+      </div>
+    </div>
+  );
+}
 
 interface AddNewProps {
   noun: "type" | "make" | "model";
@@ -97,23 +158,20 @@ function AddNew({ noun, makeId, existing, onCreated }: AddNewProps) {
 interface VehicleFormProps {
   /** `null` creates a new vehicle. */
   vehicle: Vehicle | null;
-  locationHints: string[];
   onClose: () => void;
   onSaved: (vehicle: Vehicle) => void;
 }
 
-export function VehicleForm({ vehicle, locationHints, onClose, onSaved }: VehicleFormProps) {
+export function VehicleForm({ vehicle, onClose, onSaved }: VehicleFormProps) {
   const queryClient = useQueryClient();
   const toast = useToast();
-  const locationListId = useId();
 
   const [name, setName] = useState(vehicle?.name ?? "");
   const [plate, setPlate] = useState(vehicle?.plate_number ?? "");
-  const [location, setLocation] = useState(vehicle?.location_state ?? "");
+  const [locationId, setLocationId] = useState(vehicle?.state?.id ?? "");
   const [typeId, setTypeId] = useState(vehicle?.vehicle_type.id ?? "");
   const [makeId, setMakeId] = useState(vehicle?.vehicle_make.id ?? "");
   const [modelId, setModelId] = useState(vehicle?.vehicle_model.id ?? "");
-  const [stateId, setStateId] = useState(vehicle?.state?.id ?? "");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -121,30 +179,45 @@ export function VehicleForm({ vehicle, locationHints, onClose, onSaved }: Vehicl
   const makes = useMakeOptions();
   const models = useModelOptions(makeId);
   const states = useQuery({ ...configQueries.states({ page: 1, page_size: 100 }) });
+  const countries = useQuery({ ...configQueries.countries({ page: 1, page_size: 100 }) });
+  const defaultCountryId = countries.data?.items[0]?.id;
+
+  // A vehicle created before this feature has no `state` link yet: best-effort match its
+  // existing free-text location to a known location by name, once, so the field isn't blank.
+  const [autoMatched, setAutoMatched] = useState(false);
+  if (!autoMatched && !locationId && vehicle && !vehicle.state && states.data) {
+    const match = states.data.items.find((item) => sameName(item.name, vehicle.location_state));
+    if (match) setLocationId(match.id);
+    setAutoMatched(true);
+  }
 
   const clear = (key: string) => setErrors((current) => ({ ...current, [key]: "" }));
 
   const save = useMutation({
     mutationFn: async () => {
+      const chosen = states.data?.items.find((item) => item.id === locationId);
       const clean = {
         name: name.trim(),
         plate_number: plate.trim().toUpperCase(),
-        location_state: location.trim(),
         vehicle_type_id: typeId,
         vehicle_model_id: modelId,
       };
-      if (!vehicle) return createVehicle({ ...clean, ...(stateId ? { state_id: stateId } : {}) });
+      // Location and state are always the same value here: the state's own name becomes the
+      // vehicle's `location_state`, and its id is the `state_id` link — nothing else to reconcile.
+      if (!vehicle) return createVehicle({ ...clean, location_state: chosen!.name, state_id: locationId });
       // Send only what changed, and never a null (the API answers 500 to it) — except `state_id`,
       // the one field on this endpoint where an explicit `null` is meaningful (it clears the link).
       const changes: Record<string, unknown> = diff(clean, {
         name: vehicle.name,
         plate_number: vehicle.plate_number,
-        location_state: vehicle.location_state,
         vehicle_type_id: vehicle.vehicle_type.id,
         vehicle_model_id: vehicle.vehicle_model.id,
       });
-      const currentStateId = vehicle.state?.id ?? "";
-      if (stateId !== currentStateId) changes.state_id = stateId || null;
+      const currentLocationId = vehicle.state?.id ?? "";
+      if (locationId !== currentLocationId && chosen) {
+        changes.state_id = locationId;
+        changes.location_state = chosen.name;
+      }
       return Object.keys(changes).length ? updateVehicle(vehicle.id, changes) : vehicle;
     },
     onSuccess: (saved) => {
@@ -157,12 +230,12 @@ export function VehicleForm({ vehicle, locationHints, onClose, onSaved }: Vehicl
       if (error.status === 409) {
         setErrors({ plate_number: "That plate number is already registered." });
       } else if (error.status === 400) {
-        // A type, model or state was deleted in another tab.
+        // A type, model or location was deleted in another tab.
         queryClient.invalidateQueries({ queryKey: queryKeys.vehicleTypes.all });
         queryClient.invalidateQueries({ queryKey: queryKeys.vehicleMakes.all });
         queryClient.invalidateQueries({ queryKey: queryKeys.vehicleModels.all });
         queryClient.invalidateQueries({ queryKey: queryKeys.states.all });
-        setFormError("The type, model or state you picked is no longer available. Please choose again.");
+        setFormError("The type, model or location you picked is no longer available. Please choose again.");
       } else if (error.status === 404) {
         queryClient.invalidateQueries({ queryKey: queryKeys.vehicles.all });
         setFormError("This vehicle was removed by someone else.");
@@ -183,8 +256,7 @@ export function VehicleForm({ vehicle, locationHints, onClose, onSaved }: Vehicl
     const cleanPlate = plate.trim();
     if (cleanPlate.length < 3) found.plate_number = "Plate numbers need at least 3 characters.";
     else if (cleanPlate.length > 20) found.plate_number = "Plate numbers can be at most 20 characters.";
-    if (!location.trim()) found.location_state = "Where is this vehicle based?";
-    else if (location.trim().length > 100) found.location_state = "Locations can be at most 100 characters.";
+    if (!locationId) found.location = "Choose a location.";
     if (!typeId) found.vehicle_type_id = "Choose a type.";
     if (!makeId) found.vehicle_make_id = "Choose a make.";
     else if (!modelId) found.vehicle_model_id = "Choose a model.";
@@ -214,33 +286,20 @@ export function VehicleForm({ vehicle, locationHints, onClose, onSaved }: Vehicl
         />
       </div>
 
-      <div>
-        <Field
+      <div className="space-y-2">
+        <Select
           label="Location"
-          value={location}
-          onChange={(e) => { setLocation(e.target.value); clear("location_state"); }}
-          error={errors.location_state}
-          hint="Pick a suggestion so spellings stay consistent."
-          placeholder="Lagos"
-          maxLength={100}
-          autoComplete="off"
-          list={locationListId}
-        />
-        <datalist id={locationListId}>
-          {locationHints.map((place) => <option key={place} value={place} />)}
-        </datalist>
+          value={locationId}
+          onChange={(e) => { setLocationId(e.target.value); clear("location"); }}
+          error={errors.location}
+          disabled={states.isLoading}
+          hint="Also determines which pick-up/drop-off checklist schedule the driver follows."
+        >
+          <option value="">{states.isLoading ? "Loading locations..." : "Choose a location"}</option>
+          {states.data?.items.map((state) => <option key={state.id} value={state.id}>{state.name}</option>)}
+        </Select>
+        <AddNewLocation existing={states.data?.items ?? []} defaultCountryId={defaultCountryId} onCreated={(state) => { setLocationId(state.id); clear("location"); }} />
       </div>
-
-      <Select
-        label="State"
-        value={stateId}
-        onChange={(e) => setStateId(e.target.value)}
-        disabled={states.isLoading}
-        hint="Determines which checklist schedule the driver follows. Independent of Location, which is just a display label."
-      >
-        <option value="">{states.isLoading ? "Loading states..." : "No state (follow the global default)"}</option>
-        {states.data?.items.map((state) => <option key={state.id} value={state.id}>{state.name} ({state.country.name})</option>)}
-      </Select>
 
       <div className="space-y-2">
         <Select

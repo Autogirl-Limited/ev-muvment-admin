@@ -286,7 +286,6 @@ export function FleetVehiclesPage() {
         <Modal open onClose={close} title={dialog.vehicle ? "Edit vehicle" : "Add vehicle"} size="lg">
           <VehicleForm
             vehicle={dialog.vehicle}
-            locationHints={locationHints}
             onClose={close}
             onSaved={close}
           />

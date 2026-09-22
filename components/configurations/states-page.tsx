@@ -195,8 +195,9 @@ export function StatesPage() {
       <div className="mb-4">
         <Alert tone="info">
           A state&apos;s own checklist schedule is set from{" "}
-          <Link href="/configurations/checklist-settings" className="font-medium underline underline-offset-2">Checklist settings</Link>. Link a vehicle to a
-          state from its edit form on <Link href="/fleet-vehicles" className="font-medium underline underline-offset-2">Fleet vehicles</Link>.
+          <Link href="/configurations/checklist-settings" className="font-medium underline underline-offset-2">Checklist settings</Link>. Every vehicle&apos;s
+          &quot;Location&quot; field on <Link href="/fleet-vehicles" className="font-medium underline underline-offset-2">Fleet vehicles</Link> picks one of
+          these states directly — it also decides which state&apos;s schedule that vehicle&apos;s driver follows.
         </Alert>
       </div>
 
