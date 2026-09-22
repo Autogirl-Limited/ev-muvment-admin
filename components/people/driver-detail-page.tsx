@@ -23,7 +23,7 @@ import { listDailyChecklists, type ChecklistResponse } from "@/lib/api/daily-che
 import { listChargeSessions, type ChargeSession } from "@/lib/api/charge-sessions";
 import { listDvaTransactions, resyncDriverDva, type DvaTransaction, type Paginated } from "@/lib/api/staff";
 import { listWalletAllocations, type AllocationStatus, type WalletAllocation } from "@/lib/api/wallet";
-import { LAGOS, formatDateTime, formatRelative, fullName, naira } from "@/lib/format";
+import { LAGOS, formatDateTime, formatRelative, fullName, kwh, naira } from "@/lib/format";
 import { useUserGuards } from "@/lib/hooks/use-user-guards";
 import { CACHE } from "@/lib/query/cache";
 import { queryKeys } from "@/lib/query/keys";
@@ -340,7 +340,7 @@ export function DriverDetailPage({ id }: { id: string }) {
           {/* Charge sessions */}
           <Card title="Charge sessions" icon="bolt" action={<CardLink href={`/charge-sessions?userId=${id}&dateFrom=&dateTo=`}>View all</CardLink>}>
             <RecentList<ChargeSession> query={chargeSessions} empty="No charging history yet.">
-              {(session) => <Row title={session.charger_id} sub={`Connector ${session.connector_id} · ${formatRelative(session.created_at)}`} aside={naira(session.amount)} />}
+              {(session) => <Row title={session.charger_id} sub={`Connector ${session.connector_id} · ${formatRelative(session.created_at)} · ${kwh(session.energy_kwh)}`} aside={naira(session.amount)} />}
             </RecentList>
           </Card>
 

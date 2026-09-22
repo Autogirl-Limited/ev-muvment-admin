@@ -27,6 +27,8 @@ export interface ChargeSession {
   amount: number;
   /** Computed by this API from the pre-debit balance minus `amount`, not passed through from LotGrids. */
   remaining_balance: number;
+  /** Priced energy implied by `amount` and the rate in force at `created_at`; `null` for sessions before any rate existed. */
+  energy_kwh: number | null;
 }
 
 export interface ChargeSessionStats {

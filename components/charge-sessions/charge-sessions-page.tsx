@@ -16,6 +16,7 @@ import {
   type ChargeSession,
 } from "@/lib/api/charge-sessions";
 import { listDrivers } from "@/lib/api/staff";
+import { kwh } from "@/lib/format";
 import { queryKeys } from "@/lib/query/keys";
 import { useCurrentUser } from "@/lib/query/user";
 
@@ -135,6 +136,10 @@ function SessionCard({ session, driver, onOpen }: { session: ChargeSession; driv
         <p className="shrink-0 text-right text-lg font-semibold tabular-nums">{naira(session.amount)}</p>
       </div>
       <div className="mt-4 grid gap-2 text-sm">
+        <div className="rounded-lg bg-subtle/70 p-3">
+          <p className="text-xs text-muted">Energy</p>
+          <p className="mt-1 font-semibold tabular-nums">{kwh(session.energy_kwh)}</p>
+        </div>
         <div className="rounded-lg bg-subtle/70 p-3">
           <p className="text-xs text-muted">Charger</p>
           <p className="mt-1 truncate font-mono text-xs">{session.charger_id}</p>
@@ -264,7 +269,7 @@ export function ChargeSessionsPage() {
       keepGoing = result.pagination.has_next;
       exportPage += 1;
     }
-    const header = ["id", "created_at", "user_id", "charger_id", "connector_id", "amount", "remaining_balance", "lotgrids_session_id"];
+    const header = ["id", "created_at", "user_id", "charger_id", "connector_id", "amount", "remaining_balance", "energy_kwh", "lotgrids_session_id"];
     const csv = [
       header.join(","),
       ...rows.map((session) =>
@@ -350,7 +355,7 @@ export function ChargeSessionsPage() {
         )}
 
         <div className="no-scrollbar hidden overflow-x-auto md:block">
-          <table className="w-full min-w-[64rem] text-left text-sm">
+          <table className="w-full min-w-[72rem] text-left text-sm">
             <thead className="bg-subtle/70 text-xs uppercase text-muted">
               <tr>
                 <th className="px-4 py-3 font-semibold">Started</th>
@@ -358,6 +363,7 @@ export function ChargeSessionsPage() {
                 <th className="px-4 py-3 font-semibold">Charger</th>
                 <th className="px-4 py-3 font-semibold">Connector</th>
                 <th className="px-4 py-3 font-semibold">Amount</th>
+                <th className="px-4 py-3 font-semibold">Energy</th>
                 <th className="px-4 py-3 font-semibold">Remaining balance</th>
                 <th className="px-4 py-3 font-semibold">Session ref</th>
               </tr>
@@ -366,7 +372,7 @@ export function ChargeSessionsPage() {
               {sessions.isLoading ? (
                 Array.from({ length: 6 }).map((_, index) => (
                   <tr key={index} className="animate-pulse border-t border-border">
-                    {Array.from({ length: 7 }).map((__, cell) => <td key={cell} className="px-4 py-4"><div className="h-4 w-28 rounded bg-subtle" /></td>)}
+                    {Array.from({ length: 8 }).map((__, cell) => <td key={cell} className="px-4 py-4"><div className="h-4 w-28 rounded bg-subtle" /></td>)}
                   </tr>
                 ))
               ) : sessions.data?.items.length ? (
@@ -377,13 +383,14 @@ export function ChargeSessionsPage() {
                     <td className="max-w-48 truncate px-4 py-3 font-mono text-xs" title={session.charger_id}>{session.charger_id}</td>
                     <td className="px-4 py-3">{session.connector_id}</td>
                     <td className="px-4 py-3 font-semibold tabular-nums">{naira(session.amount)}</td>
+                    <td className="px-4 py-3 tabular-nums">{kwh(session.energy_kwh)}</td>
                     <td className="px-4 py-3 tabular-nums">{naira(session.remaining_balance)}</td>
                     <td className="max-w-40 truncate px-4 py-3 font-mono text-xs">{session.lotgrids_session_id}</td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-muted">No charge sessions match these filters.</td>
+                  <td colSpan={8} className="px-4 py-12 text-center text-muted">No charge sessions match these filters.</td>
                 </tr>
               )}
             </tbody>
@@ -415,6 +422,7 @@ export function ChargeSessionsPage() {
                 ...(selected.driver?.phone_number ? [["Phone", selected.driver.phone_number]] : []),
                 ["Charger", selected.charger_id],
                 ["Connector", selected.connector_id],
+                ["Energy", kwh(selected.energy_kwh)],
                 ["Remaining balance", naira(selected.remaining_balance)],
                 ["Recorded", formatDateTime(selected.created_at)],
               ].map(([label, value]) => (

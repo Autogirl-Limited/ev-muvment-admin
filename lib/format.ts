@@ -30,6 +30,11 @@ export function naira(value: number, fractionDigits = 0) {
   }).format(value);
 }
 
+export function kwh(value: number | null | undefined) {
+  if (value === null || value === undefined) return "-";
+  return `${new Intl.NumberFormat("en-NG", { maximumFractionDigits: 2 }).format(value)} kWh`;
+}
+
 export function fullName(person: { first_name: string; last_name: string; username: string }) {
   return `${person.first_name} ${person.last_name}`.trim() || person.username;
 }
