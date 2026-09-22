@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ConfigPageHeader, EmptyState, ErrorState, SearchInput, SkeletonRows } from "@/components/dashboard/screen-kit";
@@ -30,6 +30,7 @@ import {
 } from "@/lib/api/wallet";
 import { LAGOS, formatDateTime, fullName, naira } from "@/lib/format";
 import { useDebounced } from "@/lib/hooks/use-debounced";
+import { useNow } from "@/lib/hooks/use-now";
 import { useUrlState } from "@/lib/hooks/use-url-state";
 import { queryKeys } from "@/lib/query/keys";
 import { useCurrentUser } from "@/lib/query/user";
@@ -589,6 +590,8 @@ function AllocationDetail({ id, onClose, driver }: { id: string | null; onClose:
     queryKey: queryKeys.walletAllocations.detail(id ?? ""),
     queryFn: ({ signal }) => getWalletAllocation(id!, signal),
     enabled: Boolean(id),
+    // While waiting on the driver, poll so the modal flips as soon as the payment lands or the window closes.
+    refetchInterval: (q) => (q.state.data?.status === "PENDING_PAYMENT" ? 15_000 : false),
   });
   const allocation = query.data;
 
@@ -628,7 +631,7 @@ function AllocationDetail({ id, onClose, driver }: { id: string | null; onClose:
             <Detail label="Payment reference" value={allocation.payment_reference ?? "None"} />
             <Detail label="Checkout reference" value={allocation.checkout_transaction_reference ?? "None"} />
           </dl>
-          {allocation.checkout_account_number && <PaymentDetails allocation={allocation} />}
+          {allocation.checkout_account_number && <PaymentDetails allocation={allocation} onExpire={() => query.refetch()} />}
           {allocation.notes && <Alert>{allocation.notes}</Alert>}
         </div>
       )}
@@ -636,12 +639,62 @@ function AllocationDetail({ id, onClose, driver }: { id: string | null; onClose:
   );
 }
 
+function formatCountdown(ms: number) {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return hours ? `${hours}:${pad(minutes)}:${pad(seconds)}` : `${pad(minutes)}:${pad(seconds)}`;
+}
+
+/** Live time left to pay a top-up, with a bar that drains across the checkout window and turns red near the end. */
+function ExpiryCountdown({ createdAt, expiresAt, onExpire }: { createdAt: string; expiresAt: string; onExpire: () => void }) {
+  const end = new Date(expiresAt).getTime();
+  const start = new Date(createdAt).getTime();
+  const now = useNow();
+  const remaining = end - now;
+  const done = remaining <= 0;
+  const urgent = !done && remaining <= 5 * 60_000;
+  const fraction = done ? 0 : Math.min(1, remaining / Math.max(end - start, 1));
+
+  useEffect(() => {
+    // Fire once when the window closes; the parent only refetches, which flips the status to EXPIRED.
+    if (done) onExpire();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [done]);
+
+  const tone = done || urgent ? "text-danger" : "text-brand";
+  return (
+    <div className="mt-3 rounded-lg bg-surface px-3 py-3">
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wider text-muted">{done ? "Payment window" : "Time left to pay"}</p>
+          <p role="timer" className={`mt-1 text-3xl font-semibold tabular-nums ${tone}`}>
+            {done ? "Expired" : formatCountdown(remaining)}
+          </p>
+        </div>
+        <p className="pb-1 text-right text-xs text-muted">
+          {done ? "Closed" : "Closes"} {formatDateTime(expiresAt)}
+        </p>
+      </div>
+      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-subtle" aria-hidden>
+        <div
+          className={`h-full rounded-full transition-[width] duration-1000 ease-linear ${done || urgent ? "bg-danger" : "bg-brand"}`}
+          style={{ width: `${fraction * 100}%` }}
+        />
+      </div>
+      {urgent && <p className="mt-2 text-xs text-danger">Less than 5 minutes left. The driver needs to pay now or request a new top-up.</p>}
+    </div>
+  );
+}
+
 /** The one-off account a driver pays a top-up into; only payable while the allocation is `PENDING_PAYMENT`. */
-function PaymentDetails({ allocation }: { allocation: WalletAllocation }) {
-  const expiresAt = allocation.checkout_expires_at ? new Date(allocation.checkout_expires_at) : null;
-  // The detail endpoint is uncached and applies expiry on read, so `EXPIRED` is reliable here.
+function PaymentDetails({ allocation, onExpire }: { allocation: WalletAllocation; onExpire: () => void }) {
+  // The detail endpoint is uncached and applies expiry on read, so `EXPIRED` is reliable after a refetch.
   const expired = allocation.status === "EXPIRED";
-  const payable = allocation.status === "PENDING_PAYMENT" && !expired;
+  const awaitingPayment = allocation.status === "PENDING_PAYMENT";
+  const payable = awaitingPayment && !expired;
   const accountNumber = allocation.checkout_account_number!;
 
   const rows: { label: string; value: string; copy?: string }[] = [
@@ -653,21 +706,20 @@ function PaymentDetails({ allocation }: { allocation: WalletAllocation }) {
 
   return (
     <section className={`rounded-lg border p-4 ${payable ? "border-brand/40 bg-brand/5" : "border-border bg-subtle/60"}`}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold">Payment details</h3>
-        {expiresAt && (
-          <span className={`text-xs ${expired ? "text-danger" : "text-muted"}`}>
-            {expired ? "Expired" : "Expires"} {formatDateTime(expiresAt.toISOString())}
-          </span>
-        )}
-      </div>
+      <h3 className="text-sm font-semibold">Payment details</h3>
       <p className="mt-1 text-xs text-muted">
         {payable
-          ? "Transfer the exact amount to this one-off account before it expires."
+          ? "Transfer the exact amount to this one-off account before the time runs out."
           : expired
             ? "This account can no longer accept payment."
             : "The account this top-up was paid into."}
       </p>
+      {awaitingPayment && allocation.checkout_expires_at && (
+        <ExpiryCountdown createdAt={allocation.created_at} expiresAt={allocation.checkout_expires_at} onExpire={onExpire} />
+      )}
+      {expired && allocation.checkout_expires_at && (
+        <p className="mt-2 text-xs text-danger">Expired {formatDateTime(allocation.checkout_expires_at)}</p>
+      )}
       <dl className="mt-3 grid gap-2 sm:grid-cols-2">
         {rows.map((row) => (
           <div key={row.label} className="flex items-center justify-between gap-2 rounded-lg bg-surface px-3 py-2">
