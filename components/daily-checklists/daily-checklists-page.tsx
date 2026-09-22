@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { AccessDenied } from "@/components/dashboard/access-denied";
-import { ConfigPageHeader, EmptyState, ErrorState, SearchInput } from "@/components/dashboard/screen-kit";
+import { ConfigPageHeader, EmptyState, ErrorState, Icon, SearchInput, type IconName } from "@/components/dashboard/screen-kit";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { DriverLink } from "@/components/people/people-parts";
@@ -20,6 +20,7 @@ import {
   reanalyzeDailyChecklist,
   reviewDailyChecklist,
   type AnalysisStatus,
+  type ChecklistImage,
   type ChecklistPhase,
   type ChecklistResponse,
   type ChecklistStatus,
@@ -67,12 +68,315 @@ function shortTime(iso: string | null) {
   return iso ? formatDateTime(iso) : "-";
 }
 
-function readingValue(value: unknown) {
-  if (value === null || value === undefined || value === "") return "-";
-  if (typeof value === "boolean") return value ? "Yes" : "No";
-  if (Array.isArray(value)) return value.length ? value.map((item) => (typeof item === "object" && item && "label" in item ? String(item.label) : String(item))).join(", ") : "None";
-  if (typeof value === "number") return Number.isInteger(value) ? String(value) : value.toLocaleString("en-NG", { maximumFractionDigits: 2 });
-  return String(value);
+// ---------- Vehicle condition hero (powertrain, battery/fuel, odometer, warnings) ----------
+
+const POWERTRAIN_LABEL: Record<string, string> = {
+  ELECTRIC: "Electric vehicle",
+  COMBUSTION: "Combustion (petrol/diesel)",
+  HYBRID: "Hybrid vehicle",
+};
+
+/** The best-known reading for a phase: effective (driver edits applied) falls back to the raw AI read. */
+function bestReading(dashboard: ChecklistResponse["dashboard"]): DashboardReading | null {
+  return dashboard?.effective ?? dashboard?.ai ?? null;
+}
+
+function powertrainInfo(dashboard: ChecklistResponse["dashboard"]) {
+  const reading = bestReading(dashboard);
+  const electricUnknown = reading?.is_electric === null || reading?.is_electric === undefined;
+  if (!reading || (electricUnknown && !reading.powertrain)) {
+    return { known: false as const, label: "Powertrain not detected", icon: "gauge" as IconName, tone: "neutral" as const };
+  }
+  const label = reading.powertrain ? (POWERTRAIN_LABEL[reading.powertrain] ?? reading.powertrain) : reading.is_electric ? "Electric vehicle" : "Combustion vehicle";
+  const electric = reading.is_electric ?? reading.powertrain === "ELECTRIC";
+  return {
+    known: true as const,
+    electric,
+    label,
+    icon: (electric ? "bolt" : "droplet") as IconName,
+    tone: (electric ? "success" : "brand") as "success" | "brand",
+  };
+}
+
+function fmtKm(value: number | null | undefined) {
+  return value === null || value === undefined ? null : `${Math.round(value).toLocaleString("en-NG")} km`;
+}
+
+function fmtPercent(value: number | null | undefined) {
+  return value === null || value === undefined ? null : `${Math.round(value)}%`;
+}
+
+function percentTone(value: number) {
+  if (value <= 15) return "text-danger";
+  if (value <= 40) return "text-foreground";
+  return "text-success";
+}
+
+function percentBarTone(value: number) {
+  if (value <= 15) return "bg-danger";
+  if (value <= 40) return "bg-brand";
+  return "bg-success";
+}
+
+function PercentGauge({ label, value, icon }: { label: string; value: number | null | undefined; icon: IconName }) {
+  const known = value !== null && value !== undefined;
+  const clamped = known ? Math.min(100, Math.max(0, value)) : 0;
+  return (
+    <div className="min-w-0 rounded-xl border border-border/70 bg-surface p-3.5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex items-center gap-1.5 text-xs font-medium uppercase text-muted">
+          <Icon name={icon} className="size-3.5" />
+          {label}
+        </span>
+        <span className={`text-lg font-semibold tabular-nums ${known ? percentTone(clamped) : "text-muted"}`}>
+          {known ? fmtPercent(value) : "Unknown"}
+        </span>
+      </div>
+      <div className="mt-2 h-2 overflow-hidden rounded-full bg-subtle">
+        {known && <div className={`h-full rounded-full transition-all ${percentBarTone(clamped)}`} style={{ width: `${clamped}%` }} />}
+      </div>
+    </div>
+  );
+}
+
+function MetricTile({ label, value, icon, sub }: { label: string; value: string; icon: IconName; sub?: string }) {
+  return (
+    <div className="min-w-0 rounded-xl border border-border/70 bg-surface p-3.5">
+      <span className="flex items-center gap-1.5 text-xs font-medium uppercase text-muted">
+        <Icon name={icon} className="size-3.5" />
+        {label}
+      </span>
+      <p className="mt-1.5 truncate text-lg font-semibold tabular-nums">{value}</p>
+      {sub && <p className="mt-0.5 truncate text-xs text-muted">{sub}</p>}
+    </div>
+  );
+}
+
+function VehicleConditionHero({ checklist }: { checklist: ChecklistResponse }) {
+  const dashboard = checklist.dashboard;
+  const reading = bestReading(dashboard);
+  const powertrain = powertrainInfo(dashboard);
+  const edited = dashboard?.driver_edits && Object.values(dashboard.driver_edits).some((value) => value !== null && value !== undefined);
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-subtle/70 to-surface p-4 sm:p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <span aria-hidden className={`flex size-12 shrink-0 items-center justify-center rounded-xl ${powertrain.tone === "success" ? "bg-success-soft text-success" : powertrain.tone === "brand" ? "bg-brand-soft text-brand" : "bg-subtle text-muted"}`}>
+            <Icon name="car" className="size-6" />
+          </span>
+          <div className="min-w-0">
+            <p className="truncate text-lg font-semibold">{checklist.vehicle.name}</p>
+            <p className="font-mono text-xs text-muted">{checklist.vehicle.plate_number}</p>
+          </div>
+        </div>
+        <Badge tone={powertrain.tone}>
+          <Icon name={powertrain.icon} className="size-3.5" />
+          {powertrain.label}
+        </Badge>
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <MetricTile label="Odometer" icon="gauge" value={fmtKm(reading?.odometer_km) ?? "Unknown"} />
+        {powertrain.known && powertrain.electric ? (
+          <>
+            <PercentGauge label="Battery" icon="battery" value={reading?.battery_percent} />
+            <MetricTile label="Range" icon="bolt" value={fmtKm(reading?.range_km) ?? "Unknown"} />
+            <MetricTile
+              label="Charging"
+              icon="bolt"
+              value={reading?.is_charging === true ? "Charging now" : reading?.is_charging === false ? "Not charging" : "Unknown"}
+            />
+          </>
+        ) : powertrain.known ? (
+          <>
+            <PercentGauge label="Fuel" icon="droplet" value={reading?.fuel_level_percent} />
+            <MetricTile label="Range" icon="gauge" value={fmtKm(reading?.range_km) ?? "Unknown"} />
+            <MetricTile label="Powertrain" icon="droplet" value={reading?.powertrain ?? "Combustion"} />
+          </>
+        ) : (
+          <MetricTile label="Powertrain" icon="gauge" value="Not detected" sub="The AI couldn't read the dashboard clearly." />
+        )}
+      </div>
+
+      {edited && (
+        <p className="mt-3 flex items-center gap-1.5 text-xs text-muted">
+          <Icon name="pencil" className="size-3.5" />
+          The driver corrected some of these readings{dashboard?.driver_edited_at ? ` on ${formatDateTime(dashboard.driver_edited_at)}` : ""}. See the comparison below for what changed.
+        </p>
+      )}
+    </section>
+  );
+}
+
+function WarningLights({ dashboard }: { dashboard: ChecklistResponse["dashboard"] }) {
+  const warnings = bestReading(dashboard)?.warnings ?? [];
+  if (warnings.length === 0) return null;
+  return (
+    <section className="rounded-2xl border border-danger/30 bg-danger-soft p-4">
+      <h3 className="flex items-center gap-2 font-semibold text-danger">
+        <Icon name="alertTriangle" className="size-5" />
+        Dashboard warning lights
+      </h3>
+      <ul className="mt-3 space-y-2">
+        {warnings.map((warning) => (
+          <li key={`${warning.code}-${warning.label}`} className="flex flex-wrap items-center gap-2 rounded-lg bg-surface/70 px-3 py-2 text-sm">
+            <Badge tone={warning.severity === "CRITICAL" ? "danger" : "brand"}>{warning.severity}</Badge>
+            <span className="font-medium">{warning.label}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function LocationChip({ label, snapshot, radiusMeters }: { label: string; snapshot: ChecklistResponse["start_location"]; radiusMeters: number | undefined }) {
+  if (!snapshot) return (
+    <div className="rounded-lg bg-subtle/60 p-3">
+      <p className="text-xs text-muted">{label}</p>
+      <p className="mt-1 text-sm text-muted">Not recorded</p>
+    </div>
+  );
+  return (
+    <div className="rounded-lg bg-subtle/60 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-muted">{label}</p>
+        {snapshot.within_radius !== null && (
+          <Badge tone={snapshot.within_radius ? "success" : "danger"} dot>{snapshot.within_radius ? "In range" : "Out of range"}</Badge>
+        )}
+      </div>
+      <p className="mt-1 text-sm font-medium">
+        {snapshot.distance_meters !== null ? `${Math.round(snapshot.distance_meters)} m from expected` : "Distance unknown"}
+        {radiusMeters ? <span className="text-muted"> (radius {radiusMeters} m)</span> : null}
+      </p>
+    </div>
+  );
+}
+
+function LightboxImage({ image, onClose }: { image: ChecklistImage | null; onClose: () => void }) {
+  if (!image) return null;
+  return (
+    <div
+      role="dialog"
+      aria-modal
+      aria-label={`${image.image_type} photo, enlarged`}
+      onClick={onClose}
+      className="fixed inset-0 z-[100] flex animate-fade-in items-center justify-center bg-black/85 p-4"
+    >
+      <button type="button" onClick={onClose} aria-label="Close" className="absolute right-4 top-4 flex size-10 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20">
+        <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><path d="M6 6l12 12M18 6 6 18" /></svg>
+      </button>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={image.url} alt={`${image.image_type} checklist photo, full size`} onClick={(event) => event.stopPropagation()} className="max-h-[90dvh] max-w-full rounded-lg object-contain" />
+    </div>
+  );
+}
+
+function PhotoGallery({ checklist }: { checklist: ChecklistResponse }) {
+  const [zoomed, setZoomed] = useState<ChecklistImage | null>(null);
+  return (
+    <section>
+      <h3 className="mb-3 flex items-center gap-2 font-semibold">
+        <Icon name="camera" className="size-5 text-muted" />
+        Photos
+      </h3>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {checklist.images.map((image) => {
+          const invalid = image.analysis?.image_valid === false;
+          const tone = invalid ? "danger" : image.analysis?.condition === "GOOD" ? "success" : image.analysis?.condition === "NOT_GOOD" ? "danger" : "neutral";
+          return (
+            <figure key={image.image_type} className={`overflow-hidden rounded-xl border bg-surface ${invalid ? "border-danger/40" : "border-border"}`}>
+              <button type="button" onClick={() => setZoomed(image)} className="group relative block w-full">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={image.url} alt={`${image.image_type} checklist photo`} className="aspect-video w-full bg-subtle object-cover transition group-hover:brightness-90" />
+                <span className="absolute inset-0 flex items-center justify-center opacity-0 transition group-hover:opacity-100">
+                  <span className="flex items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-xs font-medium text-white">
+                    <Icon name="zoomIn" className="size-3.5" />
+                    View full size
+                  </span>
+                </span>
+              </button>
+              <figcaption className="space-y-1 p-3 text-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium">{image.image_type}</span>
+                  <Badge tone={tone}>{invalid ? "Unusable" : (image.analysis?.condition ?? "Pending")}</Badge>
+                </div>
+                {image.analysis?.image_issue && <p className="text-xs text-danger">{image.analysis.image_issue}</p>}
+                {image.analysis?.issues?.map((issue) => (
+                  <p key={`${issue.type}-${issue.description}`} className="text-xs text-muted">{issue.severity}: {issue.description}</p>
+                ))}
+              </figcaption>
+            </figure>
+          );
+        })}
+      </div>
+      {checklist.missing_images.length > 0 && (
+        <p className="mt-3 flex items-center gap-1.5 text-sm text-danger">
+          <Icon name="alertTriangle" className="size-4" />
+          Missing photos: {checklist.missing_images.join(", ")}
+        </p>
+      )}
+      <LightboxImage image={zoomed} onClose={() => setZoomed(null)} />
+    </section>
+  );
+}
+
+const COMPARISON_ROWS: Array<{ key: keyof DashboardReading; label: string; format: (value: unknown) => string }> = [
+  { key: "odometer_km", label: "Odometer", format: (v) => fmtKm(v as number) ?? "-" },
+  { key: "battery_percent", label: "Battery", format: (v) => fmtPercent(v as number) ?? "-" },
+  { key: "fuel_level_percent", label: "Fuel level", format: (v) => fmtPercent(v as number) ?? "-" },
+  { key: "range_km", label: "Range", format: (v) => fmtKm(v as number) ?? "-" },
+  { key: "is_charging", label: "Charging", format: (v) => (v === true ? "Yes" : v === false ? "No" : "-") },
+];
+
+function DashboardComparisonTable({ dashboard }: { dashboard: ChecklistResponse["dashboard"] }) {
+  if (!dashboard) return null;
+  const rows = COMPARISON_ROWS.filter((row) => [dashboard.ai, dashboard.driver_edits, dashboard.effective].some((r) => r?.[row.key] !== null && r?.[row.key] !== undefined));
+  if (rows.length === 0) return null;
+
+  return (
+    <section className="overflow-hidden rounded-xl border border-border">
+      <div className="border-b border-border bg-subtle/60 px-4 py-3">
+        <h3 className="font-semibold">Dashboard reading</h3>
+        <p className="mt-0.5 text-xs text-muted">What the AI read from the photo, any correction the driver made, and the effective value used everywhere else.</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[28rem] text-left text-sm">
+          <thead className="text-xs uppercase text-muted">
+            <tr>
+              <th className="px-4 py-2.5 font-semibold">Field</th>
+              <th className="px-4 py-2.5 font-semibold">AI read</th>
+              <th className="px-4 py-2.5 font-semibold">Driver edit</th>
+              <th className="px-4 py-2.5 font-semibold">Effective</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {rows.map((row) => {
+              const aiValue = dashboard.ai?.[row.key];
+              const driverValue = dashboard.driver_edits?.[row.key];
+              const wasEdited = driverValue !== null && driverValue !== undefined;
+              return (
+                <tr key={row.key}>
+                  <td className="px-4 py-2.5 text-muted">{row.label}</td>
+                  <td className="px-4 py-2.5">{row.format(aiValue)}</td>
+                  <td className={`px-4 py-2.5 ${wasEdited ? "font-medium text-brand" : "text-muted"}`}>{wasEdited ? row.format(driverValue) : "-"}</td>
+                  <td className="px-4 py-2.5 font-semibold">{row.format(dashboard.effective?.[row.key])}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {(dashboard.ai?.confidence !== null && dashboard.ai?.confidence !== undefined) || dashboard.ai?.notes ? (
+        <div className="border-t border-border bg-subtle/40 px-4 py-3 text-xs text-muted">
+          {dashboard.ai?.confidence !== null && dashboard.ai?.confidence !== undefined && (
+            <span className="mr-2 font-medium">AI confidence: {Math.round((dashboard.ai.confidence as number) * 100)}%</span>
+          )}
+          {dashboard.ai?.notes && <span>{dashboard.ai.notes}</span>}
+        </div>
+      ) : null}
+    </section>
+  );
 }
 
 function DriverVehicleCell({ checklist }: { checklist: ChecklistResponse }) {
@@ -107,33 +411,6 @@ function Stats({ items }: { items: ChecklistResponse[] }) {
   );
 }
 
-function DashboardBlock({ title, reading }: { title: string; reading: DashboardReading | null }) {
-  const fields: Array<[string, keyof DashboardReading]> = [
-    ["Odometer", "odometer_km"],
-    ["Battery", "battery_percent"],
-    ["Range", "range_km"],
-    ["Fuel", "fuel_level_percent"],
-    ["Charging", "is_charging"],
-    ["Powertrain", "powertrain"],
-    ["Warnings", "warnings"],
-    ["Confidence", "confidence"],
-  ];
-  return (
-    <div className="rounded-xl border border-border p-3">
-      <h3 className="font-semibold">{title}</h3>
-      <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
-        {fields.map(([label, key]) => (
-          <div key={key} className="rounded-lg bg-subtle/60 p-2.5">
-            <dt className="text-xs text-muted">{label}</dt>
-            <dd className="mt-1 break-words font-medium">{readingValue(reading?.[key])}</dd>
-          </div>
-        ))}
-      </dl>
-      {reading?.notes && <p className="mt-2 text-sm text-muted">{reading.notes}</p>}
-    </div>
-  );
-}
-
 function ChecklistDetail({
   id,
   onClose,
@@ -144,13 +421,18 @@ function ChecklistDetail({
   const queryClient = useQueryClient();
   const toastError = (error: unknown, fallback: string) => (error instanceof ApiError ? error.message : fallback);
   const [reviewNotes, setReviewNotes] = useState("");
+  // Clear the draft note when a different checklist opens, without a setState-in-effect render cascade.
+  const [notesFor, setNotesFor] = useState(id);
+  if (notesFor !== id) {
+    setNotesFor(id);
+    setReviewNotes("");
+  }
   const detail = useQuery({
     queryKey: queryKeys.dailyChecklists.detail(id ?? ""),
     queryFn: ({ signal }) => getDailyChecklist(id!, signal),
     enabled: Boolean(id),
   });
   const checklist = detail.data;
-  useEffect(() => setReviewNotes(""), [id]);
   const reanalyze = useMutation({
     mutationFn: () => reanalyzeDailyChecklist(id!),
     onSuccess: (updated) => {
@@ -176,37 +458,55 @@ function ChecklistDetail({
         <Alert tone="error">{detail.error.message}</Alert>
       ) : checklist ? (
         <div className="space-y-5">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge tone={phaseTone(checklist.phase)}>{PHASE_LABEL[checklist.phase]}</Badge>
-            <Badge tone={statusTone(checklist)}>{checklist.analysis ? ANALYSIS_LABEL[checklist.analysis.status] : STATUS_LABEL[checklist.status]}</Badge>
-            {checklist.needs_review && <Badge tone="danger">Needs review</Badge>}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge tone={phaseTone(checklist.phase)}>{PHASE_LABEL[checklist.phase]}</Badge>
+              <Badge tone={statusTone(checklist)}>{checklist.analysis ? ANALYSIS_LABEL[checklist.analysis.status] : STATUS_LABEL[checklist.status]}</Badge>
+              {checklist.needs_review ? (
+                <Badge tone="danger">Needs review</Badge>
+              ) : checklist.reviewed ? (
+                <Badge tone="success">Reviewed</Badge>
+              ) : null}
+            </div>
+            <p className="text-sm text-muted">{dateLabel(checklist.checklist_date)} · {checklist.window.start_time.slice(0, 5)}–{checklist.window.end_time.slice(0, 5)}</p>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-lg bg-subtle/60 p-3">
-              <p className="text-xs text-muted">Driver</p>
-              <p className="mt-1 font-medium"><DriverLink id={checklist.driver.id}>{fullName(checklist.driver)}</DriverLink></p>
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border/70 bg-subtle/40 p-3.5">
+            <span aria-hidden className="flex size-10 shrink-0 items-center justify-center rounded-full bg-brand-soft text-brand">
+              <Icon name="user" className="size-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="font-medium"><DriverLink id={checklist.driver.id}>{fullName(checklist.driver)}</DriverLink></p>
+              <p className="text-xs text-muted">
+                @{checklist.driver.username}
+                {checklist.driver.phone_number && (
+                  <>
+                    {" · "}
+                    <a href={`tel:${checklist.driver.phone_number}`} className="underline underline-offset-2">{checklist.driver.phone_number}</a>
+                  </>
+                )}
+              </p>
             </div>
-            <div className="rounded-lg bg-subtle/60 p-3">
-              <p className="text-xs text-muted">Vehicle</p>
-              <p className="mt-1 font-medium">{checklist.vehicle.name}</p>
-              <p className="font-mono text-xs text-muted">{checklist.vehicle.plate_number}</p>
-            </div>
-            <div className="rounded-lg bg-subtle/60 p-3">
-              <p className="text-xs text-muted">Started</p>
-              <p className="mt-1 font-medium">{shortTime(checklist.started_at)}</p>
-            </div>
-            <div className="rounded-lg bg-subtle/60 p-3">
-              <p className="text-xs text-muted">Submitted</p>
-              <p className="mt-1 font-medium">{shortTime(checklist.submitted_at)}</p>
+            <div className="flex gap-4 text-sm sm:gap-6">
+              <div>
+                <p className="text-xs text-muted">Started</p>
+                <p className="font-medium">{shortTime(checklist.started_at)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted">Submitted</p>
+                <p className="font-medium">{shortTime(checklist.submitted_at)}</p>
+              </div>
             </div>
           </div>
+
+          <VehicleConditionHero checklist={checklist} />
+          <WarningLights dashboard={checklist.dashboard} />
 
           {checklist.flags.length > 0 && (
             <div className="space-y-2">
               <h3 className="font-semibold">Flags</h3>
               <div className="grid gap-2">
-                {checklist.flags.map((flag) => (
+                {[...checklist.flags].sort((a, b) => Number(b.severity === "CRITICAL") - Number(a.severity === "CRITICAL")).map((flag) => (
                   <div key={`${flag.code}-${flag.message}`} className="flex flex-wrap items-center gap-2 rounded-lg border border-border p-3 text-sm">
                     <Badge tone={severityTone(flag.severity)}>{flag.severity}</Badge>
                     <span className="font-medium">{flag.code.replaceAll("_", " ")}</span>
@@ -217,38 +517,32 @@ function ChecklistDetail({
             </div>
           )}
 
-          <section>
-            <h3 className="mb-3 font-semibold">Photos</h3>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {checklist.images.map((image) => (
-                <figure key={image.image_type} className="overflow-hidden rounded-xl border border-border bg-surface">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={image.url} alt={`${image.image_type} checklist photo`} className="aspect-video w-full bg-subtle object-cover" />
-                  <figcaption className="space-y-1 p-3 text-sm">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium">{image.image_type}</span>
-                      <Badge tone={image.analysis?.condition === "GOOD" ? "success" : image.analysis?.condition === "NOT_GOOD" ? "danger" : "neutral"}>
-                        {image.analysis?.condition ?? "Pending"}
-                      </Badge>
-                    </div>
-                    {image.analysis?.image_issue && <p className="text-xs text-danger">{image.analysis.image_issue}</p>}
-                    {image.analysis?.issues?.map((issue) => (
-                      <p key={`${issue.type}-${issue.description}`} className="text-xs text-muted">{issue.severity}: {issue.description}</p>
-                    ))}
-                  </figcaption>
-                </figure>
-              ))}
-            </div>
-            {checklist.missing_images.length > 0 && (
-              <p className="mt-2 text-sm text-danger">Missing: {checklist.missing_images.join(", ")}</p>
+          <PhotoGallery checklist={checklist} />
+
+          <DashboardComparisonTable dashboard={checklist.dashboard} />
+
+          <section className="rounded-xl border border-border p-4">
+            <h3 className="font-semibold">Location & schedule</h3>
+            {checklist.expected_location && (
+              <p className="mt-1 text-sm text-muted">Expected at {checklist.expected_location.address}</p>
             )}
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <LocationChip label="At start" snapshot={checklist.start_location} radiusMeters={checklist.expected_location?.radius_meters} />
+              <LocationChip label="At submit" snapshot={checklist.submit_location} radiusMeters={checklist.expected_location?.radius_meters} />
+            </div>
           </section>
 
-          <div className="grid gap-4 xl:grid-cols-3">
-            <DashboardBlock title="AI dashboard reading" reading={checklist.dashboard?.ai ?? null} />
-            <DashboardBlock title="Driver edits" reading={checklist.dashboard?.driver_edits ?? null} />
-            <DashboardBlock title="Effective dashboard" reading={checklist.dashboard?.effective ?? null} />
-          </div>
+          {checklist.condition && (
+            <section className="rounded-xl border border-border p-4">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="font-semibold">Exterior condition</h3>
+                <Badge tone={checklist.condition.status === "GOOD" ? "success" : checklist.condition.status === "NOT_GOOD" ? "danger" : "neutral"}>
+                  {checklist.condition.status}
+                </Badge>
+              </div>
+              {checklist.condition.summary && <p className="mt-2 text-sm text-muted">{checklist.condition.summary}</p>}
+            </section>
+          )}
 
           {checklist.comparison && (
             <section className="rounded-xl border border-border p-4">

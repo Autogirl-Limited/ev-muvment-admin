@@ -147,6 +147,38 @@ const PATHS = {
   external: <path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />,
   arrowUp: <path d="M12 19V5m-6 6 6-6 6 6" />,
   arrowDown: <path d="M12 5v14m-6-6 6 6 6-6" />,
+  alertTriangle: (
+    <>
+      <path d="M12 3 2 20h20L12 3Z" />
+      <path d="M12 10v4M12 17v.01" />
+    </>
+  ),
+  battery: (
+    <>
+      <rect x="2" y="8" width="18" height="8" rx="2" />
+      <path d="M22 10v4" />
+    </>
+  ),
+  gauge: (
+    <>
+      <circle cx="12" cy="13" r="8" />
+      <path d="M12 13 15.5 9M8 13a4 4 0 0 1 4-4" />
+      <path d="M12 3v1.5M4.2 6.2l1 1M19.8 6.2l-1 1" />
+    </>
+  ),
+  droplet: <path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11Z" />,
+  zoomIn: (
+    <>
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3.5-3.5M11 8v6M8 11h6" />
+    </>
+  ),
+  camera: (
+    <>
+      <path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z" />
+      <circle cx="12" cy="13.5" r="3.5" />
+    </>
+  ),
 } as const;
 
 export type IconName = keyof typeof PATHS;
