@@ -77,6 +77,7 @@ const ICONS: Record<NavIcon, ReactNode> = {
       <path d="M8 13h8M8 17h5" />
     </>
   ),
+  chargeSessions: <path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z" />,
   wallet: (
     <>
       <path d="M4 7.5h14a2 2 0 0 1 2 2V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7.5a2 2 0 0 1 2-2h11" />

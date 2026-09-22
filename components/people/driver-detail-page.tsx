@@ -20,6 +20,7 @@ import { useToast } from "@/components/ui/toast";
 import { ApiError } from "@/lib/api/browser";
 import { getVehicle } from "@/lib/api/configuration";
 import { listDailyChecklists, type ChecklistResponse } from "@/lib/api/daily-checklists";
+import { listChargeSessions, type ChargeSession } from "@/lib/api/charge-sessions";
 import { listDvaTransactions, resyncDriverDva, type DvaTransaction, type Paginated } from "@/lib/api/staff";
 import { listWalletAllocations, type AllocationStatus, type WalletAllocation } from "@/lib/api/wallet";
 import { LAGOS, formatDateTime, formatRelative, fullName, naira } from "@/lib/format";
@@ -125,6 +126,12 @@ export function DriverDetailPage({ id }: { id: string }) {
   const transactions = useQuery({
     queryKey: queryKeys.dvaTransactions.list({ page: 1, page_size: RECENT, userId: id }),
     queryFn: ({ signal }) => listDvaTransactions({ page: 1, page_size: RECENT, userId: id }, signal),
+    enabled: isDriver,
+    ...CACHE.live,
+  });
+  const chargeSessions = useQuery({
+    queryKey: queryKeys.chargeSessions.list({ page: 1, page_size: RECENT, userId: id }),
+    queryFn: ({ signal }) => listChargeSessions({ page: 1, page_size: RECENT, userId: id }, signal),
     enabled: isDriver,
     ...CACHE.live,
   });
@@ -327,6 +334,13 @@ export function DriverDetailPage({ id }: { id: string }) {
           <Card title="Recent transfers" icon="swap" action={<CardLink href={`/dva-transactions?userId=${id}&dateFrom=&dateTo=`}>View all</CardLink>}>
             <RecentList<DvaTransaction> query={transactions} empty="No transfers into this driver's bank account yet.">
               {(tx) => <Row title={tx.payer_name ?? "Unknown sender"} sub={`${tx.payer_bank_name ?? tx.payer_bank_code ?? "Bank transfer"} · ${formatRelative(tx.paid_at)}`} aside={naira(tx.amount)} />}
+            </RecentList>
+          </Card>
+
+          {/* Charge sessions */}
+          <Card title="Charge sessions" icon="bolt" action={<CardLink href={`/charge-sessions?userId=${id}&dateFrom=&dateTo=`}>View all</CardLink>}>
+            <RecentList<ChargeSession> query={chargeSessions} empty="No charging history yet.">
+              {(session) => <Row title={session.charger_id} sub={`Connector ${session.connector_id} · ${formatRelative(session.created_at)}`} aside={naira(session.amount)} />}
             </RecentList>
           </Card>
 
