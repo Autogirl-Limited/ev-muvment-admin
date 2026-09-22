@@ -97,6 +97,11 @@ export interface ChecklistResponse {
   } | null;
   flags: Array<{ code: string; severity: FlagSeverity; message: string }>;
   needs_review: boolean;
+  reviewed: {
+    at: string;
+    by: ChecklistDriver;
+    notes: string | null;
+  } | null;
 }
 
 export interface ListDailyChecklistsParams {
@@ -110,6 +115,7 @@ export interface ListDailyChecklistsParams {
   vehicleId?: string;
   driverId?: string;
   needsReview?: boolean;
+  reviewed?: boolean;
   searchTerm?: string;
 }
 
@@ -123,4 +129,8 @@ export function getDailyChecklist(id: string, signal?: AbortSignal) {
 
 export function reanalyzeDailyChecklist(id: string) {
   return apiFetch<ChecklistResponse>(`/daily-checklists/${id}/reanalyze`, { method: "POST" });
+}
+
+export function reviewDailyChecklist(id: string, notes?: string | null) {
+  return apiFetch<ChecklistResponse>(`/daily-checklists/${id}/review`, { method: "PATCH", body: { notes: notes || null } });
 }

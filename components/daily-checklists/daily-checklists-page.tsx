@@ -18,6 +18,7 @@ import {
   getDailyChecklist,
   listDailyChecklists,
   reanalyzeDailyChecklist,
+  reviewDailyChecklist,
   type AnalysisStatus,
   type ChecklistPhase,
   type ChecklistResponse,
@@ -141,13 +142,15 @@ function ChecklistDetail({
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
-  const toastError = (error: unknown) => (error instanceof ApiError ? error.message : "Couldn't re-run analysis.");
+  const toastError = (error: unknown, fallback: string) => (error instanceof ApiError ? error.message : fallback);
+  const [reviewNotes, setReviewNotes] = useState("");
   const detail = useQuery({
     queryKey: queryKeys.dailyChecklists.detail(id ?? ""),
     queryFn: ({ signal }) => getDailyChecklist(id!, signal),
     enabled: Boolean(id),
   });
   const checklist = detail.data;
+  useEffect(() => setReviewNotes(""), [id]);
   const reanalyze = useMutation({
     mutationFn: () => reanalyzeDailyChecklist(id!),
     onSuccess: (updated) => {
@@ -155,9 +158,18 @@ function ChecklistDetail({
       queryClient.invalidateQueries({ queryKey: queryKeys.dailyChecklists.all });
     },
   });
+  const review = useMutation({
+    mutationFn: () => reviewDailyChecklist(id!, reviewNotes.trim()),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(queryKeys.dailyChecklists.detail(updated.id), updated);
+      queryClient.invalidateQueries({ queryKey: queryKeys.dailyChecklists.all });
+      setReviewNotes("");
+    },
+  });
+  const busy = reanalyze.isPending || review.isPending;
 
   return (
-    <Modal open={Boolean(id)} onClose={reanalyze.isPending ? () => {} : onClose} title="Checklist review" size="xl">
+    <Modal open={Boolean(id)} onClose={busy ? () => {} : onClose} title="Checklist review" size="xl">
       {detail.isLoading ? (
         <div className="h-72 animate-pulse rounded-xl bg-subtle" />
       ) : detail.isError ? (
@@ -255,11 +267,39 @@ function ChecklistDetail({
             </section>
           )}
 
-          {reanalyze.isError && <Alert tone="error">{toastError(reanalyze.error)}</Alert>}
+          <section className="space-y-3 rounded-xl border border-border p-4">
+            <h3 className="font-semibold">Review</h3>
+            {checklist.reviewed ? (
+              <div className="rounded-lg bg-subtle/60 p-3 text-sm">
+                <p className="font-medium">Reviewed by {fullName(checklist.reviewed.by)} on {formatDateTime(checklist.reviewed.at)}</p>
+                {checklist.reviewed.notes && <p className="mt-1 text-muted">{checklist.reviewed.notes}</p>}
+              </div>
+            ) : checklist.status === "SUBMITTED" ? (
+              <div className="space-y-2">
+                <textarea
+                  value={reviewNotes}
+                  onChange={(event) => setReviewNotes(event.target.value.slice(0, 1000))}
+                  rows={3}
+                  disabled={review.isPending}
+                  className="w-full resize-none rounded-lg border border-input bg-surface p-3 text-sm outline-none focus:border-brand focus:ring-3 focus:ring-brand/20"
+                  placeholder="Optional notes (e.g. called the driver, dent is old damage)"
+                />
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted">{reviewNotes.length}/1000</p>
+                  <Button onClick={() => review.mutate()} loading={review.isPending}>Mark reviewed</Button>
+                </div>
+                {review.isError && <Alert tone="error">{toastError(review.error, "Couldn't sign off this checklist.")}</Alert>}
+              </div>
+            ) : (
+              <p className="text-sm text-muted">Only submitted checklists can be reviewed.</p>
+            )}
+          </section>
+
+          {reanalyze.isError && <Alert tone="error">{toastError(reanalyze.error, "Couldn't re-run analysis.")}</Alert>}
 
           <ModalActions>
-            <Button variant="secondary" onClick={onClose} disabled={reanalyze.isPending}>Close</Button>
-            <Button onClick={() => reanalyze.mutate()} loading={reanalyze.isPending}>Re-run analysis</Button>
+            <Button variant="secondary" onClick={onClose} disabled={busy}>Close</Button>
+            <Button onClick={() => reanalyze.mutate()} loading={reanalyze.isPending} disabled={review.isPending}>Re-run analysis</Button>
           </ModalActions>
         </div>
       ) : null}
@@ -423,6 +463,7 @@ export function DailyChecklistsPage() {
                   <div><Badge tone={statusTone(checklist)}>{checklist.analysis ? ANALYSIS_LABEL[checklist.analysis.status] : "Not started"}</Badge></div>
                   <div className="flex flex-wrap gap-1.5">
                     {checklist.needs_review && <Badge tone="danger">Review</Badge>}
+                    {!checklist.needs_review && checklist.reviewed && <Badge tone="success">Reviewed</Badge>}
                     {checklist.flags.slice(0, 2).map((flag) => <Badge key={flag.code} tone={severityTone(flag.severity)}>{flag.code.replaceAll("_", " ")}</Badge>)}
                     {checklist.flags.length > 2 && <Badge>+{checklist.flags.length - 2}</Badge>}
                   </div>
