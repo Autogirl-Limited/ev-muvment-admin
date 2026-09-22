@@ -170,7 +170,7 @@ export function EVWalletPage() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl">
+    <div className="min-w-0">
       <ConfigPageHeader
         title="EV Wallet"
         icon="bolt"
