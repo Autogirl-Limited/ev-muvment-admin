@@ -8,6 +8,7 @@ import { AccessDenied } from "@/components/dashboard/access-denied";
 import { ErrorState, Icon, type IconName } from "@/components/dashboard/screen-kit";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
 import type { AttentionItem, DashboardInterval, FinancialSummary, Metric, Overview, PieChart, TimeSeries } from "@/lib/api/dashboard";
 import { formatDate, formatRelative, naira } from "@/lib/format";
 import { queryKeys } from "@/lib/query/keys";
@@ -214,50 +215,47 @@ function AttentionFeed({ attention, isAdmin }: { attention: AttentionItem[]; isA
   );
 }
 
-function DateControls({
-  dateFrom,
-  dateTo,
-  interval,
+function HeaderControls({
+  range,
   error,
   onRange,
-  onInterval,
   onRefresh,
 }: {
-  dateFrom: string;
-  dateTo: string;
-  interval: DashboardInterval;
+  range: { dateFrom: string; dateTo: string };
   error?: string;
   onRange: (range: { dateFrom: string; dateTo: string }) => void;
-  onInterval: (interval: DashboardInterval) => void;
   onRefresh: () => void;
 }) {
   return (
-    <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:max-w-2xl">
-        <label className="min-w-0 text-sm font-medium">
-          <span className="mb-1.5 block text-muted">From</span>
-          <input
-            type="date"
-            value={dateFrom}
-            onChange={(event) => onRange({ dateFrom: event.target.value, dateTo })}
-            className="h-10 w-full rounded-lg border border-input bg-surface px-3 text-sm outline-none transition focus:border-brand focus:ring-3 focus:ring-brand/20"
-          />
-        </label>
-        <label className="min-w-0 text-sm font-medium">
-          <span className="mb-1.5 block text-muted">To</span>
-          <input
-            type="date"
-            value={dateTo}
-            onChange={(event) => onRange({ dateFrom, dateTo: event.target.value })}
-            className="h-10 w-full rounded-lg border border-input bg-surface px-3 text-sm outline-none transition focus:border-brand focus:ring-3 focus:ring-brand/20"
-          />
-        </label>
-        <Button variant="secondary" onClick={onRefresh} className="self-end">
-          <Icon name="refresh" className="size-4" />
-          Refresh
-        </Button>
-      </div>
-      <div role="group" aria-label="Trend interval" className="grid grid-cols-3 gap-1 rounded-lg bg-subtle p-1 lg:w-64">
+    <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-start sm:justify-end">
+      <DateRangePicker
+        compact
+        allowAll={false}
+        align="end"
+        from={range.dateFrom}
+        to={range.dateTo}
+        onApply={({ from, to }) => onRange({ dateFrom: from, dateTo: to })}
+        className="w-full sm:w-80"
+      />
+      <Button variant="secondary" onClick={onRefresh} className="shrink-0">
+        <Icon name="refresh" className="size-4" />
+        Refresh
+      </Button>
+      {error && <p className="text-sm font-medium text-danger sm:basis-full sm:text-right">{error}</p>}
+    </div>
+  );
+}
+
+function IntervalControls({
+  interval,
+  onInterval,
+}: {
+  interval: DashboardInterval;
+  onInterval: (interval: DashboardInterval) => void;
+}) {
+  return (
+    <div className="flex justify-start">
+      <div role="group" aria-label="Trend interval" className="grid w-full grid-cols-3 gap-1 rounded-lg bg-subtle p-1 sm:w-64">
         {INTERVALS.map((item) => (
           <button
             key={item.value}
@@ -270,7 +268,6 @@ function DateControls({
           </button>
         ))}
       </div>
-      {error && <p className="text-sm font-medium text-danger lg:ml-auto">{error}</p>}
     </div>
   );
 }
@@ -414,8 +411,8 @@ export function DashboardPage() {
   const trend = queries.moneyTrend.data;
 
   return (
-    <div className="mx-auto w-full max-w-[94rem] space-y-5">
-      <header className="space-y-5">
+    <div className="w-full space-y-5">
+      <header className="space-y-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
             <p className="text-sm font-medium text-brand">Dashboard</p>
@@ -426,28 +423,14 @@ export function DashboardPage() {
               Fleet health, wallet flow, and operational queues for the current admin cycle.
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
-            <Link href="/wallet" className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-border bg-surface px-3 text-sm font-medium transition hover:bg-subtle">
-              <Icon name="wallet" className="size-4" />
-              EV Wallet
-            </Link>
-            <Link href="/daily-checklists" className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-border bg-surface px-3 text-sm font-medium transition hover:bg-subtle">
-              <Icon name="clipboard" className="size-4" />
-              Checklists
-            </Link>
-          </div>
-        </div>
-        <CardShell className="p-4">
-          <DateControls
-            dateFrom={range.dateFrom}
-            dateTo={range.dateTo}
-            interval={interval}
+          <HeaderControls
+            range={range}
             error={rangeError || (error instanceof Error ? error.message : undefined)}
             onRange={setRange}
-            onInterval={setInterval}
             onRefresh={refresh}
           />
-        </CardShell>
+        </div>
+        <IntervalControls interval={interval} onInterval={setInterval} />
       </header>
 
       {error && !rangeError ? (
