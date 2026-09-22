@@ -152,6 +152,8 @@ export interface Vehicle {
   name: string;
   plate_number: string;
   location_state: string;
+  /** The managed state this vehicle is linked to (2026-09-22); independent of `location_state`, which stays free text. `null` = follows the global checklist settings. */
+  state: NamedRef | null;
   vehicle_type: NamedRef;
   vehicle_make: NamedRef;
   vehicle_model: NamedRef;
@@ -168,9 +170,14 @@ export interface CreateVehicleRequest {
   location_state: string;
   vehicle_type_id: string;
   vehicle_model_id: string;
+  /** Optional on create; the vehicle follows the global checklist settings when omitted. */
+  state_id?: string;
 }
 
-export type UpdateVehicleRequest = Partial<CreateVehicleRequest>;
+export type UpdateVehicleRequest = Partial<Omit<CreateVehicleRequest, "state_id">> & {
+  /** Unlike every other field on this endpoint, an explicit `null` here is meaningful: it clears the link. Omit to leave it alone. */
+  state_id?: string | null;
+};
 
 export interface ListVehiclesParams {
   page?: number;

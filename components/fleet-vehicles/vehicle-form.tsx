@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useState, type FormEvent } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { Icon } from "@/components/dashboard/screen-kit";
 import { Alert } from "@/components/ui/alert";
@@ -20,6 +20,7 @@ import {
   type Vehicle,
 } from "@/lib/api/configuration";
 import { sameName } from "@/lib/format";
+import { configQueries } from "@/lib/query/configuration";
 import { useMakeOptions, useModelOptions, useTypeOptions } from "@/lib/query/catalogue";
 import { queryKeys } from "@/lib/query/keys";
 
@@ -112,12 +113,14 @@ export function VehicleForm({ vehicle, locationHints, onClose, onSaved }: Vehicl
   const [typeId, setTypeId] = useState(vehicle?.vehicle_type.id ?? "");
   const [makeId, setMakeId] = useState(vehicle?.vehicle_make.id ?? "");
   const [modelId, setModelId] = useState(vehicle?.vehicle_model.id ?? "");
+  const [stateId, setStateId] = useState(vehicle?.state?.id ?? "");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
 
   const types = useTypeOptions();
   const makes = useMakeOptions();
   const models = useModelOptions(makeId);
+  const states = useQuery({ ...configQueries.states({ page: 1, page_size: 100 }) });
 
   const clear = (key: string) => setErrors((current) => ({ ...current, [key]: "" }));
 
@@ -130,15 +133,18 @@ export function VehicleForm({ vehicle, locationHints, onClose, onSaved }: Vehicl
         vehicle_type_id: typeId,
         vehicle_model_id: modelId,
       };
-      if (!vehicle) return createVehicle(clean);
-      // Send only what changed, and never a null (the API answers 500 to it).
-      const changes = diff(clean, {
+      if (!vehicle) return createVehicle({ ...clean, ...(stateId ? { state_id: stateId } : {}) });
+      // Send only what changed, and never a null (the API answers 500 to it) — except `state_id`,
+      // the one field on this endpoint where an explicit `null` is meaningful (it clears the link).
+      const changes: Record<string, unknown> = diff(clean, {
         name: vehicle.name,
         plate_number: vehicle.plate_number,
         location_state: vehicle.location_state,
         vehicle_type_id: vehicle.vehicle_type.id,
         vehicle_model_id: vehicle.vehicle_model.id,
       });
+      const currentStateId = vehicle.state?.id ?? "";
+      if (stateId !== currentStateId) changes.state_id = stateId || null;
       return Object.keys(changes).length ? updateVehicle(vehicle.id, changes) : vehicle;
     },
     onSuccess: (saved) => {
@@ -151,11 +157,12 @@ export function VehicleForm({ vehicle, locationHints, onClose, onSaved }: Vehicl
       if (error.status === 409) {
         setErrors({ plate_number: "That plate number is already registered." });
       } else if (error.status === 400) {
-        // A type or model was deleted in another tab.
+        // A type, model or state was deleted in another tab.
         queryClient.invalidateQueries({ queryKey: queryKeys.vehicleTypes.all });
         queryClient.invalidateQueries({ queryKey: queryKeys.vehicleMakes.all });
         queryClient.invalidateQueries({ queryKey: queryKeys.vehicleModels.all });
-        setFormError("The type or model you picked is no longer available. Please choose again.");
+        queryClient.invalidateQueries({ queryKey: queryKeys.states.all });
+        setFormError("The type, model or state you picked is no longer available. Please choose again.");
       } else if (error.status === 404) {
         queryClient.invalidateQueries({ queryKey: queryKeys.vehicles.all });
         setFormError("This vehicle was removed by someone else.");
@@ -223,6 +230,17 @@ export function VehicleForm({ vehicle, locationHints, onClose, onSaved }: Vehicl
           {locationHints.map((place) => <option key={place} value={place} />)}
         </datalist>
       </div>
+
+      <Select
+        label="State"
+        value={stateId}
+        onChange={(e) => setStateId(e.target.value)}
+        disabled={states.isLoading}
+        hint="Determines which checklist schedule the driver follows. Independent of Location, which is just a display label."
+      >
+        <option value="">{states.isLoading ? "Loading states..." : "No state (follow the global default)"}</option>
+        {states.data?.items.map((state) => <option key={state.id} value={state.id}>{state.name} ({state.country.name})</option>)}
+      </Select>
 
       <div className="space-y-2">
         <Select

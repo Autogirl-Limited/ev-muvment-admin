@@ -86,8 +86,25 @@ export const queryKeys = {
     all: ["countries"] as const,
     list: (filters: unknown) => ["countries", "list", filters] as const,
   },
+  states: {
+    all: ["states"] as const,
+    list: (filters: unknown) => ["states", "list", filters] as const,
+    detail: (id: string) => ["states", "detail", id] as const,
+  },
   /** The single global checklist configuration (`GET /checklist-settings`). */
   checklistSettings: ["checklist-settings"] as const,
+  /** Per-state checklist settings (`GET /checklist-settings?stateId=`). `null` id = the global row. */
+  stateChecklistSettings: (stateId: string | null) => ["checklist-settings", "state", stateId] as const,
+  scheduleOverrides: {
+    all: ["schedule-overrides"] as const,
+    list: (vehicleId: string, filters: unknown) => ["schedule-overrides", "list", vehicleId, filters] as const,
+  },
+  pickupRequests: {
+    all: ["pickup-requests"] as const,
+    list: (filters: unknown) => ["pickup-requests", "list", filters] as const,
+    detail: (id: string) => ["pickup-requests", "detail", id] as const,
+  },
+  dropOffMonitor: ["drop-off-monitor"] as const,
   groups: {
     all: ["groups"] as const,
     list: (filters: unknown) => ["groups", "list", filters] as const,

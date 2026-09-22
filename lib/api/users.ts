@@ -7,14 +7,28 @@ export type StaffRole = Exclude<UserType, "DRIVER">;
 
 export const STAFF_ROLES: readonly StaffRole[] = ["ADMIN", "ACCOUNT_OFFICER", "RELATIONSHIP_OFFICER"];
 
+export interface VehicleWindow {
+  start_time: string;
+  end_time: string;
+}
+
 /** The compact vehicle embedded in a user: no plate number and no checklist overrides. */
 export interface VehicleSummary {
   id: string;
   name: string;
   location_state: string;
+  state: NamedRef | null;
   vehicle_type: NamedRef;
   vehicle_make: NamedRef;
   vehicle_model: NamedRef;
+  /**
+   * Today's effective pick-up/drop-off window (2026-09-22), fully resolved
+   * server-side (one-day override -> standing override -> state -> global).
+   * Always `null` on the `GET /users` list (a driver's own `/users/me`,
+   * `GET /users/{id}` and login/refresh always populate them).
+   */
+  pick_up_window: VehicleWindow | null;
+  drop_off_window: VehicleWindow | null;
 }
 
 /** A user as returned by the admin `/users` endpoints (`virtual_account` / `vehicle` are typed, unlike the session `User`). */

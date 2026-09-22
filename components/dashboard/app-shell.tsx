@@ -113,6 +113,18 @@ const ICONS: Record<NavIcon, ReactNode> = {
       <path d="M9 18h6" />
     </>
   ),
+  pickupRequests: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </>
+  ),
+  dropOffMonitor: (
+    <>
+      <path d="M12 21s7-6.2 7-11.5a7 7 0 0 0-14 0C5 14.8 12 21 12 21Z" />
+      <circle cx="12" cy="9.5" r="2.5" />
+    </>
+  ),
 };
 
 function Icon({ name, className = "size-5" }: { name: NavIcon; className?: string }) {

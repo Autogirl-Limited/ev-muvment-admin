@@ -28,6 +28,14 @@ import {
   type UpdateChecklistOverridesRequest,
   type Vehicle,
 } from "@/lib/api/configuration";
+import {
+  cancelScheduleOverride,
+  createScheduleOverride,
+  listScheduleOverrides,
+  type ChecklistPhase as SchedulePhase,
+  type CreateScheduleOverrideRequest,
+  type ScheduleOverride,
+} from "@/lib/api/schedule-overrides";
 import { formatDateTime, fullName } from "@/lib/format";
 import { useDebounced } from "@/lib/hooks/use-debounced";
 import { CACHE } from "@/lib/query/cache";
@@ -418,6 +426,149 @@ function OverrideLocationFields({
   );
 }
 
+// ---------- One-day schedule overrides ----------
+const SCHEDULE_PHASE_LABEL: Record<SchedulePhase, string> = { PICK_UP: "Pick-up", DROP_OFF: "Drop-off" };
+
+function lagosToday() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Lagos" }).format(new Date());
+}
+
+function ScheduleOverrideForm({ vehicleId, onDone }: { vehicleId: string; onDone: () => void }) {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const [date, setDate] = useState(lagosToday());
+  const [phase, setPhase] = useState<SchedulePhase>("PICK_UP");
+  const [start, setStart] = useState("");
+  const [end, setEnd] = useState("");
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const create = useMutation({
+    mutationFn: () => {
+      const body: CreateScheduleOverrideRequest = { override_date: date, phase, start_time: start, end_time: end, reason: reason.trim() || undefined };
+      return createScheduleOverride(vehicleId, body);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.scheduleOverrides.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.vehicles.detail(vehicleId) });
+      toast.success("One-day schedule override saved. The driver was notified.");
+      onDone();
+    },
+    onError: (err) => setError(errorText(err, "Couldn't save this override.")),
+  });
+
+  const submit = () => {
+    setError(null);
+    if (!start || !end) return setError("Set both a start and end time.");
+    if (end <= start) return setError("The window must close after it opens.");
+    create.mutate();
+  };
+
+  return (
+    <div className="space-y-3 rounded-xl border border-border bg-subtle/40 p-3.5">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Date" type="date" min={lagosToday()} value={date} onChange={(e) => setDate(e.target.value)} />
+        <Select label="Phase" value={phase} onChange={(e) => setPhase(e.target.value as SchedulePhase)}>
+          <option value="PICK_UP">Pick-up</option>
+          <option value="DROP_OFF">Drop-off</option>
+        </Select>
+        <Field label="New start" type="time" step={60} value={start} onChange={(e) => setStart(e.target.value)} />
+        <Field label="New end" type="time" step={60} value={end} onChange={(e) => setEnd(e.target.value)} />
+      </div>
+      <Field label="Reason (optional)" value={reason} onChange={(e) => setReason(e.target.value.slice(0, 255))} placeholder="Driver reported heavy traffic" />
+      {error && <Alert tone="error">{error}</Alert>}
+      <div className="flex justify-end gap-2">
+        <Button variant="ghost" onClick={onDone} disabled={create.isPending}>Cancel</Button>
+        <Button variant="secondary" onClick={submit} loading={create.isPending}>Save override</Button>
+      </div>
+    </div>
+  );
+}
+
+function ScheduleOverridesSection({ vehicle, isAdmin }: { vehicle: Vehicle; isAdmin: boolean }) {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const [adding, setAdding] = useState(false);
+  const [cancelling, setCancelling] = useState<ScheduleOverride | null>(null);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+
+  const overrides = useQuery({
+    queryKey: queryKeys.scheduleOverrides.list(vehicle.id, { dateFrom: lagosToday() }),
+    queryFn: ({ signal }) => listScheduleOverrides(vehicle.id, { dateFrom: lagosToday() }, signal),
+  });
+
+  const cancel = useMutation({
+    mutationFn: (override: ScheduleOverride) => cancelScheduleOverride(vehicle.id, override.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.scheduleOverrides.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.vehicles.detail(vehicle.id) });
+      toast.success("Override cancelled. The vehicle reverts to its normal schedule for that day.");
+      setCancelling(null);
+    },
+    onError: (err) => setCancelError(errorText(err, "Couldn't cancel this override.")),
+  });
+
+  const items = overrides.data ?? [];
+
+  return (
+    <div className="rounded-xl border border-border p-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-xs font-medium uppercase text-muted">One-day schedule overrides</p>
+          <p className="mt-1 text-sm text-muted">A &quot;just this once&quot; pick-up/drop-off window change that wins over everything else, for one date only. Admin only.</p>
+        </div>
+        {isAdmin && !adding && <Button variant="secondary" className="py-3" onClick={() => setAdding(true)}>Add override</Button>}
+      </div>
+
+      {isAdmin && adding && <div className="mt-3"><ScheduleOverrideForm vehicleId={vehicle.id} onDone={() => setAdding(false)} /></div>}
+
+      <div className="mt-3">
+        {overrides.isLoading ? (
+          <div className="h-16 animate-pulse rounded-lg bg-subtle" />
+        ) : overrides.isError ? (
+          <Alert tone="error">{overrides.error.message}</Alert>
+        ) : items.length === 0 ? (
+          <p className="text-sm text-muted">No upcoming overrides for this vehicle.</p>
+        ) : (
+          <ul className="space-y-2">
+            {items.map((override) => (
+              <li key={override.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-subtle/60 p-3 text-sm">
+                <div className="min-w-0">
+                  <p className="font-medium">
+                    {override.override_date} · {SCHEDULE_PHASE_LABEL[override.phase]} · {trimTime(override.start_time)}–{trimTime(override.end_time)}
+                  </p>
+                  {override.reason && <p className="mt-0.5 truncate text-xs text-muted">{override.reason}</p>}
+                </div>
+                {isAdmin && (
+                  <Button variant="ghost" className="text-danger hover:bg-danger-soft hover:text-danger" onClick={() => { setCancelError(null); setCancelling(override); }}>
+                    Cancel
+                  </Button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <ConfirmDialog
+        open={cancelling !== null}
+        onClose={() => setCancelling(null)}
+        onConfirm={() => cancelling && cancel.mutate(cancelling)}
+        title="Cancel this override?"
+        confirmLabel="Cancel override"
+        tone="primary"
+        loading={cancel.isPending}
+        error={cancelError}
+      >
+        <p>
+          The driver will revert to their normal {cancelling ? SCHEDULE_PHASE_LABEL[cancelling.phase].toLowerCase() : ""} window for{" "}
+          <strong className="font-semibold text-foreground">{cancelling?.override_date}</strong>. They will not be notified of this cancellation.
+        </p>
+      </ConfirmDialog>
+    </div>
+  );
+}
+
 export function VehicleDetails({ id, isAdmin, onClose, onEdit, onAssign, onUnassign, onReassign, onDelete }: DetailsProps) {
   const [editingSchedule, setEditingSchedule] = useState(false);
   const query = useQuery({
@@ -425,11 +576,12 @@ export function VehicleDetails({ id, isAdmin, onClose, onEdit, onAssign, onUnass
     queryFn: ({ signal }) => getVehicle(id!, signal),
     enabled: id !== null,
   });
+  const vehicle = query.data;
+  // The vehicle's base schedule is its state's settings when linked, else the global default.
   const settings = useQuery({
-    ...configQueries.checklistSettings(),
+    ...configQueries.stateChecklistSettings(vehicle?.state?.id ?? null),
     enabled: id !== null,
   });
-  const vehicle = query.data;
 
   return (
     <Modal open={id !== null} onClose={onClose} title={vehicle?.name ?? "Vehicle"} size="lg">
@@ -446,6 +598,7 @@ export function VehicleDetails({ id, isAdmin, onClose, onEdit, onAssign, onUnass
 
           <dl className="grid gap-3 sm:grid-cols-2">
             <Fact label="Location">{vehicle.location_state}</Fact>
+            <Fact label="State">{vehicle.state ? vehicle.state.name : <span className="text-muted">None (follows global default)</span>}</Fact>
             <Fact label="Type">{vehicle.vehicle_type.name}</Fact>
             <Fact label="Make">{vehicle.vehicle_make.name}</Fact>
             <Fact label="Model">{vehicle.vehicle_model.name}</Fact>
@@ -483,7 +636,10 @@ export function VehicleDetails({ id, isAdmin, onClose, onEdit, onAssign, onUnass
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="text-xs font-medium uppercase text-muted">Checklist schedule</p>
-                <p className="mt-1 text-sm text-muted">Custom rows override the global pick-up or drop-off defaults for this vehicle.</p>
+                <p className="mt-1 text-sm text-muted">
+                  Base schedule: <strong className="font-medium text-foreground">{vehicle.state ? vehicle.state.name : "Global default"}</strong>. Custom rows
+                  below override that for this vehicle standingly.
+                </p>
               </div>
               <Button variant="secondary" className="py-3" onClick={() => setEditingSchedule(true)}>Edit schedule</Button>
             </div>
@@ -513,6 +669,8 @@ export function VehicleDetails({ id, isAdmin, onClose, onEdit, onAssign, onUnass
               </div>
             ) : null}
           </div>
+
+          <ScheduleOverridesSection vehicle={vehicle} isAdmin={isAdmin} />
 
           <div className="flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:flex-wrap sm:justify-end">
             <Button variant="ghost" onClick={() => onDelete(vehicle)} className="text-danger hover:bg-danger-soft hover:text-danger">Delete</Button>

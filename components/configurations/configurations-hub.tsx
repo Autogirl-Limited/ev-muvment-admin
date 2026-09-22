@@ -93,6 +93,7 @@ export function ConfigurationsHub() {
   const countries = useQuery({ ...configQueries.countries(first), enabled: isStaff });
   const checklist = useQuery({ ...configQueries.checklistSettings(), enabled: isStaff });
   const groups = useQuery({ ...configQueries.groups(first), enabled: isStaff });
+  const states = useQuery({ ...configQueries.states(first), enabled: isStaff });
 
   // Data only admins can read is warmed when a card is hovered or focused.
   const queryClient = useQueryClient();
@@ -161,6 +162,14 @@ export function ConfigurationsHub() {
           description="The reference list of countries with their continent, code and currency. Switch a country on or off as you expand."
           badge={isAdmin ? undefined : "View only"}
           stats={[{ label: "Countries", value: total(countries.data) }]}
+        />
+        <ConfigCard
+          href="/configurations/states"
+          icon="mapPin"
+          title="States"
+          description="States under a country. Link a vehicle to one so its driver follows that state's own pick-up/drop-off schedule instead of the global default."
+          badge={isAdmin ? undefined : "View only"}
+          stats={[{ label: "States", value: total(states.data) }]}
         />
       </div>
     </div>

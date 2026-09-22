@@ -46,6 +46,12 @@ function shortId(id: string) {
   return `Driver ...${id.slice(-4)}`;
 }
 
+/** Prefer the driver embedded on the session (2026-09-22); fall back to the id-lookup map for older rows. */
+function driverLabel(session: ChargeSession, fallback: Map<string, string>) {
+  if (session.driver) return `${session.driver.first_name} ${session.driver.last_name}`.trim() || shortId(session.user_id);
+  return fallback.get(session.user_id) ?? shortId(session.user_id);
+}
+
 function useDebounced(value: string, delay = 400) {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -330,7 +336,7 @@ export function ChargeSessionsPage() {
               <SessionCard
                 key={session.id}
                 session={session}
-                driver={driverNames.get(session.user_id) ?? shortId(session.user_id)}
+                driver={driverLabel(session, driverNames)}
                 onOpen={() => setSelectedId(session.id)}
               />
             ))}
@@ -367,7 +373,7 @@ export function ChargeSessionsPage() {
                 sessions.data.items.map((session) => (
                   <tr key={session.id} onClick={() => setSelectedId(session.id)} className="cursor-pointer border-t border-border transition hover:bg-subtle/60">
                     <td className="px-4 py-3">{formatDateTime(session.created_at)}</td>
-                    <td className="px-4 py-3"><DriverLink id={session.user_id}>{driverNames.get(session.user_id) ?? shortId(session.user_id)}</DriverLink></td>
+                    <td className="px-4 py-3"><DriverLink id={session.user_id}>{driverLabel(session, driverNames)}</DriverLink></td>
                     <td className="max-w-48 truncate px-4 py-3 font-mono text-xs" title={session.charger_id}>{session.charger_id}</td>
                     <td className="px-4 py-3">{session.connector_id}</td>
                     <td className="px-4 py-3 font-semibold tabular-nums">{naira(session.amount)}</td>
@@ -404,8 +410,9 @@ export function ChargeSessionsPage() {
             </div>
             <dl className="grid gap-3 text-sm sm:grid-cols-2">
               {[
-                ["Driver", driverNames.get(selected.user_id) ?? shortId(selected.user_id)],
+                ["Driver", driverLabel(selected, driverNames)],
                 ["User ID", selected.user_id],
+                ...(selected.driver?.phone_number ? [["Phone", selected.driver.phone_number]] : []),
                 ["Charger", selected.charger_id],
                 ["Connector", selected.connector_id],
                 ["Remaining balance", naira(selected.remaining_balance)],

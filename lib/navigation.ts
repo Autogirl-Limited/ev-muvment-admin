@@ -13,7 +13,9 @@ export type NavIcon =
   | "drivers"
   | "staff"
   | "fleet"
-  | "configurations";
+  | "configurations"
+  | "pickupRequests"
+  | "dropOffMonitor";
 
 export interface NavItem {
   label: string;
@@ -65,6 +67,18 @@ export const NAVIGATION: NavSection[] = [
         label: "Daily checklists",
         href: "/daily-checklists",
         icon: "checklists",
+        roles: ["ADMIN", "ACCOUNT_OFFICER", "RELATIONSHIP_OFFICER"],
+      },
+      {
+        label: "Drop-off monitor",
+        href: "/drop-off-monitor",
+        icon: "dropOffMonitor",
+        roles: ["ADMIN", "ACCOUNT_OFFICER", "RELATIONSHIP_OFFICER"],
+      },
+      {
+        label: "Pick-up requests",
+        href: "/pickup-requests",
+        icon: "pickupRequests",
         roles: ["ADMIN", "ACCOUNT_OFFICER", "RELATIONSHIP_OFFICER"],
       },
       {

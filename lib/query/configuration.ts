@@ -11,6 +11,7 @@ import {
   type ListCatalogueParams,
   type ListVehicleModelsParams,
 } from "@/lib/api/configuration";
+import { getChecklistSettingsFor, listStates, type ListStatesParams } from "@/lib/api/states";
 import { CACHE } from "@/lib/query/cache";
 import { queryKeys } from "@/lib/query/keys";
 
@@ -81,5 +82,19 @@ export const configQueries = {
       queryKey: queryKeys.groups.detail(id),
       queryFn: ({ signal }) => getGroup(id, signal),
       ...CACHE.live,
+    }),
+  states: (params: ListStatesParams) =>
+    queryOptions({
+      queryKey: queryKeys.states.list(params),
+      queryFn: ({ signal }) => listStates(params, signal),
+      placeholderData: keepPreviousData,
+      ...CACHE.reference,
+    }),
+  /** Pass `null` for the global default. */
+  stateChecklistSettings: (stateId: string | null) =>
+    queryOptions({
+      queryKey: queryKeys.stateChecklistSettings(stateId),
+      queryFn: ({ signal }) => getChecklistSettingsFor(stateId ?? undefined, signal),
+      ...CACHE.settings,
     }),
 };

@@ -84,6 +84,12 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
           queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
           queryClient.invalidateQueries({ queryKey: queryKeys.me });
           break;
+        case "vehicle.schedule_override.updated":
+          // Payload is the full Vehicle, not the override itself — refetch the override list/dashboard for details.
+          queryClient.invalidateQueries({ queryKey: queryKeys.vehicles.all });
+          queryClient.invalidateQueries({ queryKey: queryKeys.scheduleOverrides.all });
+          queryClient.invalidateQueries({ queryKey: queryKeys.dropOffMonitor });
+          break;
         case "wallet_allocation.created":
         case "wallet_allocation.updated": {
           const allocation = data as WalletAllocation;
@@ -109,6 +115,13 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
             );
           }
           queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all });
+          // These features have no dedicated event, so refresh their dashboards off the generic notification title.
+          if (/pick-up (extension )?request/i.test(notification.title)) {
+            queryClient.invalidateQueries({ queryKey: queryKeys.pickupRequests.all });
+          }
+          if (notification.title.startsWith("Drop-off")) {
+            queryClient.invalidateQueries({ queryKey: queryKeys.dropOffMonitor });
+          }
           toast.info(notification.title);
           break;
         }

@@ -15,6 +15,7 @@ import { Select } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
 import { ApiError } from "@/lib/api/browser";
 import { updateChecklistSettings, type AIProvider, type ChecklistSettings } from "@/lib/api/checklists-groups";
+import { updateChecklistSettingsFor, type StateChecklistSettings } from "@/lib/api/states";
 import {
   MAX_GRACE,
   PHASES,
@@ -32,6 +33,7 @@ import {
   type SettingsForm,
 } from "@/lib/checklist-form";
 import { LAGOS, formatDateTime } from "@/lib/format";
+import { useUrlState } from "@/lib/hooks/use-url-state";
 import { configQueries } from "@/lib/query/configuration";
 import { queryKeys } from "@/lib/query/keys";
 import { useStaffNames } from "@/lib/query/staff-names";
@@ -193,6 +195,31 @@ function ModelPicker({
   );
 }
 
+function StateTabs({
+  stateId,
+  states,
+  onSelect,
+}: {
+  stateId: string | null;
+  states: { id: string; name: string }[];
+  onSelect: (id: string | null) => void;
+}) {
+  const tabClass = (active: boolean) =>
+    `shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition ${active ? "bg-brand text-brand-foreground" : "bg-subtle text-muted hover:bg-subtle/70 hover:text-foreground"}`;
+  return (
+    <div role="tablist" aria-label="Checklist settings scope" className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+      <button type="button" role="tab" aria-selected={stateId === null} className={tabClass(stateId === null)} onClick={() => onSelect(null)}>
+        Global default
+      </button>
+      {states.map((state) => (
+        <button key={state.id} type="button" role="tab" aria-selected={stateId === state.id} className={tabClass(stateId === state.id)} onClick={() => onSelect(state.id)}>
+          {state.name}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /** Map an API failure back to form fields; anything left over is shown in the dialog. */
 function mapServerErrors(error: unknown): FormErrors {
   const mapped: FormErrors = {};
@@ -222,14 +249,23 @@ export function ChecklistSettingsPage() {
   const isStaff = isAdmin || user.user_type === "ACCOUNT_OFFICER" || user.user_type === "RELATIONSHIP_OFFICER";
   const queryClient = useQueryClient();
   const toast = useToast();
+  const url = useUrlState();
+  const stateId = url.get("state") || null;
 
-  const settings = useQuery({
-    ...configQueries.checklistSettings(),
-    enabled: isStaff,
-    // No push channel for staff yet, so notice colleagues' edits by polling while the page is open.
+  const states = useQuery({ ...configQueries.states({ page: 1, page_size: 100 }), enabled: isStaff });
+  // Fetched regardless of the active tab so a state tab can tell "inheriting" from "forked" by comparing ids.
+  // No push channel for staff yet, so notice colleagues' edits by polling while the page is open.
+  const globalSettings = useQuery({ ...configQueries.checklistSettings(), enabled: isStaff, refetchInterval: 45_000 });
+  const stateSettings = useQuery({
+    ...configQueries.stateChecklistSettings(stateId),
+    enabled: isStaff && stateId !== null,
     refetchInterval: 45_000,
   });
+
+  const settings = stateId === null ? globalSettings : stateSettings;
   const latest = settings.data;
+  const activeState = stateId ? states.data?.items.find((item) => item.id === stateId) : null;
+  const isForked = stateId !== null && Boolean(latest && globalSettings.data && latest.id !== globalSettings.data.id);
 
   // `baseline` is the saved settings the form was built from; the form is the user's working copy.
   const [baseline, setBaseline] = useState<ChecklistSettings | null>(null);
@@ -242,6 +278,16 @@ export function ChecklistSettingsPage() {
   const patch = baseline && form ? buildPatch(baseline, form) : {};
   const dirty = Object.keys(patch).length > 0;
 
+  // Reset the working form when the selected tab changes, so a state's settings never bleed into another's form.
+  const [loadedFor, setLoadedFor] = useState<string | null>(stateId);
+  if (loadedFor !== stateId) {
+    setLoadedFor(stateId);
+    setBaseline(null);
+    setForm(null);
+    setServerErrors({});
+    setDialogError(null);
+  }
+
   // Adopt the newest settings when there are no unsaved edits (first load, or a colleague saved).
   if (latest && (!baseline || (!dirty && latest.updated_at !== baseline.updated_at))) {
     setBaseline(latest);
@@ -252,16 +298,22 @@ export function ChecklistSettingsPage() {
   const nameOf = useStaffNames([baseline?.updated_by, latest?.updated_by], isAdmin);
 
   const save = useMutation({
-    mutationFn: () => updateChecklistSettings(patch),
+    mutationFn: () => (stateId === null ? updateChecklistSettings(patch) : updateChecklistSettingsFor(stateId, patch)),
     onSuccess: (saved) => {
       // The response is the source of truth: put it in the cache and rebuild the form from it.
-      queryClient.setQueryData(queryKeys.checklistSettings, saved);
+      if (stateId === null) queryClient.setQueryData(queryKeys.checklistSettings, saved);
+      else queryClient.setQueryData(queryKeys.stateChecklistSettings(stateId), saved as StateChecklistSettings);
+      queryClient.invalidateQueries({ queryKey: queryKeys.checklistSettings });
       setBaseline(saved);
       setForm(toForm(saved));
       setServerErrors({});
       setDialogError(null);
       setConfirming(false);
-      toast.success("Checklist settings saved. Drivers see the change now.");
+      toast.success(
+        stateId === null
+          ? "Checklist settings saved. Drivers see the change now."
+          : `${activeState?.name ?? "This state"}'s checklist settings saved. Drivers linked to it see the change now.`,
+      );
     },
     onError: (error) => {
       const mapped = mapServerErrors(error);
@@ -282,10 +334,14 @@ export function ChecklistSettingsPage() {
     setServerErrors({});
   };
 
+  const selectState = (id: string | null) => url.set({ state: id ?? undefined });
+  const tabs = states.data?.items ?? [];
+
   if (settings.isError && !latest) {
     return (
       <div>
         <ConfigPageHeader icon="clipboard" title="Checklist settings" />
+        <div className="mb-5"><StateTabs stateId={stateId} states={tabs} onSelect={selectState} /></div>
         <div className="rounded-2xl border border-border bg-surface shadow-card">
           <ErrorState message={settings.error.message} onRetry={() => settings.refetch()} />
         </div>
@@ -297,6 +353,7 @@ export function ChecklistSettingsPage() {
     return (
       <div>
         <ConfigPageHeader icon="clipboard" title="Checklist settings" description="When and where drivers do their daily checklists." />
+        <div className="mb-5"><StateTabs stateId={stateId} states={tabs} onSelect={selectState} /></div>
         <div role="status" aria-label="Loading" className="animate-pulse space-y-5">
           <div className="h-24 rounded-2xl bg-subtle" />
           <div className="grid gap-5 lg:grid-cols-2">
@@ -324,7 +381,24 @@ export function ChecklistSettingsPage() {
         description="When drivers can start their daily pick-up and drop-off checklists, where they must be, and which AI reads the photos."
       />
 
+      <div className="mb-5"><StateTabs stateId={stateId} states={tabs} onSelect={selectState} /></div>
+
       <div className="space-y-5">
+        {activeState && (
+          <Alert tone="info">
+            {isForked ? (
+              <>
+                <strong className="font-semibold">{activeState.name}</strong> has its own checklist settings, last changed{" "}
+                {formatDateTime(baseline.updated_at)}{updatedBy ? ` by ${updatedBy}` : ""}.
+              </>
+            ) : (
+              <>
+                <strong className="font-semibold">{activeState.name}</strong> is currently following the global default. Saving any change here gives{" "}
+                {activeState.name} its own checklist settings from now on.
+              </>
+            )}
+          </Alert>
+        )}
         {changedElsewhere && (
           <div role="status" className="flex flex-col gap-3 rounded-xl border border-border bg-subtle p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
             <p>
