@@ -15,12 +15,6 @@ import { queryKeys } from "@/lib/query/keys";
 import { useDashboardQueries } from "@/lib/query/dashboard";
 import { useCurrentUser } from "@/lib/query/user";
 
-const INTERVALS: { value: DashboardInterval; label: string }[] = [
-  { value: "day", label: "Day" },
-  { value: "week", label: "Week" },
-  { value: "month", label: "Month" },
-];
-
 const SLICE_COLORS: Record<string, string> = {
   PENDING_PAYMENT: "#f59e0b",
   AWAITING_ALLOCATION: "#ef4444",
@@ -87,11 +81,11 @@ function firstError(queries: UseQueryResult[]) {
 }
 
 function CardShell({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <section className={`rounded-xl border border-border bg-surface shadow-card ${className}`}>{children}</section>;
+  return <section className={`w-full min-w-0 rounded-xl border border-border bg-surface shadow-card ${className}`}>{children}</section>;
 }
 
 function LoadingBlock({ className = "h-32" }: { className?: string }) {
-  return <div className={`${className} animate-pulse rounded-xl bg-subtle`} />;
+  return <div className={`w-full min-w-0 ${className} animate-pulse rounded-xl bg-subtle`} />;
 }
 
 function HeroMetric({ label, value, detail, icon }: { label: string; value: string; detail: string; icon: IconName }) {
@@ -113,7 +107,7 @@ function HeroMetric({ label, value, detail, icon }: { label: string; value: stri
 
 function OverviewGrid({ overview }: { overview: Overview }) {
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid w-full min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <HeroMetric
         icon="users"
         label="Drivers"
@@ -155,7 +149,7 @@ function ChangeBadge({ metric }: { metric: Metric }) {
 
 function FinancialCards({ summary }: { summary: FinancialSummary }) {
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+    <div className="grid w-full min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
       {summary.metrics.map((metric) => (
         <CardShell key={metric.key} className="p-4">
           <div className="flex items-start justify-between gap-2">
@@ -200,11 +194,11 @@ function AttentionFeed({ attention, isAdmin }: { attention: AttentionItem[]; isA
               </>
             );
             return isAdmin && href ? (
-              <Link key={item.key} href={href} className="flex items-center gap-3 rounded-lg border border-border p-3 transition hover:bg-subtle">
+              <Link key={item.key} href={href} className="flex w-full min-w-0 items-center gap-3 rounded-lg border border-border p-3 transition hover:bg-subtle">
                 {content}
               </Link>
             ) : (
-              <div key={item.key} className="flex items-center gap-3 rounded-lg border border-border p-3">
+              <div key={item.key} className="flex w-full min-w-0 items-center gap-3 rounded-lg border border-border p-3">
                 {content}
               </div>
             );
@@ -227,7 +221,7 @@ function HeaderControls({
   onRefresh: () => void;
 }) {
   return (
-    <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-start sm:justify-end">
+    <div className="flex w-full min-w-0 flex-col gap-2 sm:w-auto sm:flex-row sm:items-start sm:justify-end">
       <DateRangePicker
         compact
         allowAll={false}
@@ -235,39 +229,13 @@ function HeaderControls({
         from={range.dateFrom}
         to={range.dateTo}
         onApply={({ from, to }) => onRange({ dateFrom: from, dateTo: to })}
-        className="w-full sm:w-80"
+        className="w-full min-w-0 sm:w-80"
       />
-      <Button variant="secondary" onClick={onRefresh} className="shrink-0">
+      <Button variant="secondary" onClick={onRefresh} fullWidth className="shrink-0 sm:w-auto">
         <Icon name="refresh" className="size-4" />
         Refresh
       </Button>
       {error && <p className="text-sm font-medium text-danger sm:basis-full sm:text-right">{error}</p>}
-    </div>
-  );
-}
-
-function IntervalControls({
-  interval,
-  onInterval,
-}: {
-  interval: DashboardInterval;
-  onInterval: (interval: DashboardInterval) => void;
-}) {
-  return (
-    <div className="flex justify-start">
-      <div role="group" aria-label="Trend interval" className="grid w-full grid-cols-3 gap-1 rounded-lg bg-subtle p-1 sm:w-64">
-        {INTERVALS.map((item) => (
-          <button
-            key={item.value}
-            type="button"
-            aria-pressed={interval === item.value}
-            onClick={() => onInterval(item.value)}
-            className={`h-9 rounded-md px-3 text-sm font-medium transition ${interval === item.value ? "bg-surface text-foreground shadow-card" : "text-muted hover:text-foreground"}`}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
     </div>
   );
 }
@@ -291,7 +259,7 @@ function DonutChart({ title, chart, totalLabel }: { title: string; chart: PieCha
         </div>
         <Badge tone="neutral">{formatNumber(chart.total)}</Badge>
       </div>
-      <div className="mt-4 grid gap-4 sm:grid-cols-[12rem_minmax(0,1fr)] sm:items-center">
+      <div className="mt-4 grid w-full min-w-0 grid-cols-1 gap-4 sm:grid-cols-[12rem_minmax(0,1fr)] sm:items-center">
         <div className="relative mx-auto size-44">
           <svg viewBox="0 0 120 120" className="size-full -rotate-90" role="img" aria-label={title}>
             <circle cx="60" cy="60" r={radius} fill="none" stroke="var(--subtle)" strokeWidth="18" />
@@ -356,7 +324,7 @@ function TrendChart({ trend }: { trend: TimeSeries }) {
           ))}
         </div>
       </div>
-      <div className="mt-4 overflow-x-auto">
+      <div className="mt-4 w-full min-w-0 overflow-x-auto">
         <svg viewBox={`0 0 ${width} ${height}`} className="h-72 min-w-[42rem] w-full" role="img" aria-label="Money trend chart">
           {yTicks.map((tick) => (
             <g key={tick}>
@@ -391,7 +359,7 @@ export function DashboardPage() {
   const isStaff = currentUser.user_type === "ADMIN" || currentUser.user_type === "ACCOUNT_OFFICER" || currentUser.user_type === "RELATIONSHIP_OFFICER";
   const isAdmin = currentUser.user_type === "ADMIN";
   const [range, setRange] = useState(initialRange);
-  const [interval, setInterval] = useState<DashboardInterval>("day");
+  const interval: DashboardInterval = "day";
   const queryClient = useQueryClient();
 
   const rangeError = range.dateFrom && range.dateTo && range.dateFrom > range.dateTo ? "Start date must be before end date." : undefined;
@@ -411,9 +379,9 @@ export function DashboardPage() {
   const trend = queries.moneyTrend.data;
 
   return (
-    <div className="w-full space-y-5">
+    <div className="w-full min-w-0 space-y-5">
       <header className="space-y-4">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex w-full min-w-0 flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
             <p className="text-sm font-medium text-brand">Dashboard</p>
             <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">
@@ -430,18 +398,17 @@ export function DashboardPage() {
             onRefresh={refresh}
           />
         </div>
-        <IntervalControls interval={interval} onInterval={setInterval} />
       </header>
 
       {error && !rangeError ? (
         <ErrorState message={error instanceof Error ? error.message : "Dashboard data could not be loaded."} onRetry={refresh} />
       ) : isLoading(allQueries) ? (
-        <div className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="w-full min-w-0 space-y-4">
+          <div className="grid w-full min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {Array.from({ length: 4 }).map((_, index) => <LoadingBlock key={index} className="h-32" />)}
           </div>
           <LoadingBlock className="h-72" />
-          <div className="grid gap-4 xl:grid-cols-2">
+          <div className="grid w-full min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
             <LoadingBlock className="h-80" />
             <LoadingBlock className="h-80" />
           </div>
@@ -449,14 +416,14 @@ export function DashboardPage() {
       ) : (
         <>
           {overview && <OverviewGrid overview={overview} />}
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]">
-            <div className="space-y-4">
+          <div className="grid w-full min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]">
+            <div className="w-full min-w-0 space-y-4">
               {summary && <FinancialCards summary={summary} />}
               {trend && <TrendChart trend={trend} />}
             </div>
             {attention && <AttentionFeed attention={attention.items} isAdmin={isAdmin} />}
           </div>
-          <div className="grid gap-4 xl:grid-cols-2">
+          <div className="grid w-full min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
             {allocations && <DonutChart title="Allocations by status" chart={allocations} totalLabel="Wallet allocation count" />}
             {condition && <DonutChart title="Vehicle condition" chart={condition} totalLabel="Latest checklist verdict" />}
           </div>
