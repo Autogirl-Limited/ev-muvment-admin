@@ -184,6 +184,14 @@ export function listDrivers(searchTerm: string, signal?: AbortSignal) {
   );
 }
 
+/** One page of every driver, for resolving names in exports. */
+export function listDriversPage(page: number, signal?: AbortSignal) {
+  return apiFetch<Paginated<User>>(
+    `/users${toQuery({ userType: "DRIVER", page, page_size: 100 })}`,
+    { signal },
+  );
+}
+
 export function resyncDriverDva(userId: string) {
   return apiFetch<VirtualAccount>(`/payments/virtual-accounts/${userId}/resync`, { method: "POST" });
 }

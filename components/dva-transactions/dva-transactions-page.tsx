@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 
 import { AccessDenied } from "@/components/dashboard/access-denied";
 import { Button } from "@/components/ui/button";
+import { ExportDialog } from "@/components/dva-transactions/export-dialog";
 import { DriverLink } from "@/components/people/people-parts";
 import { DateRangePicker, lagosToday } from "@/components/ui/date-range-picker";
 import { Modal, ModalActions } from "@/components/ui/modal";
@@ -236,6 +237,7 @@ export function DvaTransactionsPage() {
   const [driverFinderOpen, setDriverFinderOpen] = useState(false);
   const [maintenanceOpen, setMaintenanceOpen] = useState(false);
   const [resyncMode, setResyncMode] = useState<"choose" | "all" | "one">("choose");
+  const [exportOpen, setExportOpen] = useState(false);
 
   const isStaff = user.user_type === "ADMIN" || user.user_type === "ACCOUNT_OFFICER" || user.user_type === "RELATIONSHIP_OFFICER";
   const isAdmin = user.user_type === "ADMIN";
@@ -353,34 +355,6 @@ export function DvaTransactionsPage() {
     setDriverSearch("");
   };
 
-  const exportCsv = async () => {
-    setNotice("Preparing CSV export...");
-    const rows: DvaTransaction[] = [];
-    let exportPage = 1;
-    let keepGoing = true;
-    while (keepGoing && rows.length < 5000) {
-      const result = await listDvaTransactions({ ...filters, page: exportPage, page_size: 100 });
-      rows.push(...result.items);
-      keepGoing = result.pagination.has_next;
-      exportPage += 1;
-    }
-    const header = ["id", "paid_at", "user_id", "amount", "settlement_amount", "payer_name", "payer_account_number", "payer_bank_name", "payer_bank_code", "transaction_reference", "payment_reference", "narration"];
-    const csv = [
-      header.join(","),
-      ...rows.map((tx) =>
-        header.map((key) => JSON.stringify(String(tx[key as keyof DvaTransaction] ?? ""))).join(","),
-      ),
-    ].join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `dva-transactions-${lagosToday()}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
-    setNotice(`Exported ${rows.length} transactions${rows.length >= 5000 ? " (capped at 5,000)" : ""}.`);
-  };
-
   return (
     <div className="space-y-6">
       <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -424,7 +398,12 @@ export function DvaTransactionsPage() {
             </label>
             {isAdmin && <Button variant="secondary" onClick={() => setDriverFinderOpen(true)}>Find driver</Button>}
             <Button variant="secondary" onClick={() => transactions.refetch()} loading={transactions.isRefetching}>Refresh</Button>
-            <Button variant="secondary" onClick={exportCsv} disabled={!transactions.data?.pagination.total_items}>CSV</Button>
+            <Button variant="secondary" onClick={() => setExportOpen(true)}>
+              <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+              </svg>
+              Export
+            </Button>
           </div>
           {invalidRange && <p className="text-sm text-danger">The start date must be before or equal to the end date.</p>}
           {selectedDriverLabel && (
@@ -695,6 +674,15 @@ export function DvaTransactionsPage() {
           )}
         </div>
       </Modal>
+
+      {exportOpen && (
+        <ExportDialog
+          onClose={() => setExportOpen(false)}
+          isAdmin={isAdmin}
+          generatedBy={`${user.first_name} ${user.last_name}`.trim() || user.username}
+          initial={{ dateFrom, dateTo, userId, driverLabel: userId ? (driverNames.get(userId) ?? null) : null, searchTerm: search.trim() }}
+        />
+      )}
 
       <Modal open={Boolean(resyncedAccount)} onClose={() => setResyncedAccount(null)} title="New bank account">
         {resyncedAccount && <DvaCard account={resyncedAccount} />}
