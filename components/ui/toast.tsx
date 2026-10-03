@@ -19,6 +19,8 @@ interface ToastApi {
 const ToastContext = createContext<ToastApi | null>(null);
 
 const DURATION_MS = 4500;
+// Error messages tend to be longer and need acting on; give them time to be read.
+const ERROR_DURATION_MS = 9000;
 
 const TONES: Record<Tone, { ring: string; icon: ReactNode }> = {
   success: {
@@ -50,7 +52,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     (tone: Tone, message: string) => {
       const id = (nextId.current += 1);
       setItems((current) => [...current.slice(-3), { id, tone, message }]);
-      window.setTimeout(() => dismiss(id), DURATION_MS);
+      window.setTimeout(() => dismiss(id), tone === "error" ? ERROR_DURATION_MS : DURATION_MS);
     },
     [dismiss],
   );

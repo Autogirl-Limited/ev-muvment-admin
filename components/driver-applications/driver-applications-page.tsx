@@ -8,6 +8,7 @@ import { AccessDenied } from "@/components/dashboard/access-denied";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Button } from "@/components/ui/button";
 import { Modal, ModalActions } from "@/components/ui/modal";
+import { useToast } from "@/components/ui/toast";
 import { ApiError } from "@/lib/api/browser";
 import {
   approveDriverApplication,
@@ -24,6 +25,12 @@ import { useCurrentUser } from "@/lib/query/user";
 
 const STATUSES: Array<ApplicationStatus | "ALL"> = ["PENDING", "APPROVED", "REJECTED", "ALL"];
 const PAGE_SIZE = 20;
+
+/** Ends an API message with a full stop so guidance can follow it. */
+function sentence(message: string) {
+  const trimmed = message.trim();
+  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+}
 
 function fullName(app: DriverApplication) {
   return `${app.first_name} ${app.last_name}`.trim();
@@ -284,6 +291,7 @@ export function DriverApplicationsPage() {
   const router = useRouter();
   const pathname = usePathname();
   const queryClient = useQueryClient();
+  const toast = useToast();
   const [status, setStatus] = useState<ApplicationStatus | "ALL">(() => {
     if (typeof window === "undefined") return "PENDING";
     const value = new URLSearchParams(window.location.search).get("status");
@@ -304,7 +312,6 @@ export function DriverApplicationsPage() {
   const [approvedApp, setApprovedApp] = useState<DriverApplication | null>(null);
   const [rejectTarget, setRejectTarget] = useState<DriverApplication | null>(null);
   const [reason, setReason] = useState("");
-  const [notice, setNotice] = useState<string | null>(null);
   const isAdmin = user.user_type === "ADMIN";
 
   const filters = useMemo(
@@ -368,21 +375,21 @@ export function DriverApplicationsPage() {
     },
     onError: (error) => {
       if (error instanceof ApiError) {
-        if (error.status === 502) return setNotice(`${error.message} Nothing was created and the application is still pending, so it is safe to try again.`);
-        if (error.status === 503) return setNotice(`${error.message} LotGrids isn't configured on the server yet, so applications can't be approved until it is.`);
+        if (error.status === 502) return toast.error(`${sentence(error.message)} Nothing was created and the application is still pending, so it is safe to try again.`);
+        if (error.status === 503) return toast.error(`${sentence(error.message)} LotGrids isn't configured on the server yet, so applications can't be approved until it is.`);
         if (error.status === 409 && /already been/i.test(error.message)) {
           invalidateApplications();
           setApproveTarget(null);
-          return setNotice(error.message);
+          return toast.error(error.message);
         }
-        if (error.status === 409) return setNotice(`${error.message}. Reject the application with applicant-facing guidance, or resolve the duplicate account first.`);
+        if (error.status === 409) return toast.error(`${sentence(error.message)} Reject the application with applicant-facing guidance, or resolve the duplicate account first.`);
         if (error.status === 404) {
           invalidateApplications();
           setApproveTarget(null);
-          return setNotice("This application no longer exists. The list was refreshed.");
+          return toast.error("This application no longer exists. The list was refreshed.");
         }
       }
-      setNotice("Approval failed. Please try again.");
+      toast.error(error instanceof ApiError ? error.message : "Approval failed. Please try again.");
     },
   });
 
@@ -391,27 +398,27 @@ export function DriverApplicationsPage() {
     onSuccess: () => {
       setRejectTarget(null);
       setReason("");
-      setNotice("Application rejected.");
+      toast.success("Application rejected.");
       invalidateApplications();
     },
     onError: (error) => {
       if (error instanceof ApiError) {
-        if (error.status === 422) return setNotice("Reason must be 500 characters or fewer.");
+        if (error.status === 422) return toast.error(error.fieldErrors.reason ?? "Reason must be 500 characters or fewer.");
         if (error.status === 409) {
           invalidateApplications();
           setRejectTarget(null);
-          return setNotice(error.message);
+          return toast.error(error.message);
         }
-        if (error.status === 404) return setNotice("This application no longer exists.");
+        if (error.status === 404) return toast.error("This application no longer exists.");
       }
-      setNotice("Rejection failed. Please try again.");
+      toast.error(error instanceof ApiError ? error.message : "Rejection failed. Please try again.");
     },
   });
 
   const resend = useMutation({
     mutationFn: ({ userId, channel }: { userId: string; channel: "EMAIL" | "SMS" }) => sendDriverCredentials(userId, channel),
-    onSuccess: (_, vars) => setNotice(`Credentials sent by ${vars.channel.toLowerCase()}.`),
-    onError: (error) => setNotice(error instanceof ApiError ? error.message : "Credentials could not be sent."),
+    onSuccess: (_, vars) => toast.success(`Credentials sent by ${vars.channel.toLowerCase()}.`),
+    onError: (error) => toast.error(error instanceof ApiError ? error.message : "Credentials could not be sent."),
   });
 
   const data = list.data;
@@ -426,13 +433,6 @@ export function DriverApplicationsPage() {
         title="Driver applications"
         description="Review pending applicants, approve driver accounts with bank accounts, and recover cleanly when provider or duplicate-account issues happen."
       />
-
-      {notice && (
-        <div className="flex items-start justify-between gap-3 rounded-lg border border-border bg-surface p-3 text-sm shadow-card">
-          <p>{notice}</p>
-          <button type="button" onClick={() => setNotice(null)} className="text-muted hover:text-foreground">Dismiss</button>
-        </div>
-      )}
 
       <section className="rounded-lg border border-border bg-surface shadow-card">
         <div className="flex flex-col gap-3 border-b border-border p-4 lg:flex-row lg:items-center lg:justify-between">

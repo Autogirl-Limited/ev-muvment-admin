@@ -188,7 +188,7 @@ function InviteSuccess({ user, onClose, onAnother }: { user: ManagedUser; onClos
       await sendDriverCredentials(user.id, "EMAIL");
       toast.success("New credentials sent by email.");
     } catch (error) {
-      toast.error(error instanceof ApiError && error.status === 502 ? "The password was reset but the email couldn't be delivered. Try again." : "Couldn't send credentials. Try again.");
+      toast.error(error instanceof ApiError && error.status === 502 ? "The password was reset but the email couldn't be delivered. Try again." : error instanceof ApiError ? error.message : "Couldn't send credentials. Try again.");
     } finally {
       setResending(false);
     }

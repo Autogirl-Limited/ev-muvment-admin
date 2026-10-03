@@ -48,8 +48,9 @@ export function toResult<T>(
     fieldErrors[path.split(".").pop() ?? path] ??= detail.issue;
   }
 
-  // Server-side faults carry internal wording; keep the UI message generic.
-  const message = status >= 500 || !envelope?.message ? GENERIC_ERROR_MESSAGE : envelope.message;
+  // An unhandled 500 carries internal wording; keep that generic. 502/503/504
+  // are deliberate provider failures ("NIN blocked by NIMC") the admin must see.
+  const message = status === 500 || !envelope?.message ? GENERIC_ERROR_MESSAGE : envelope.message;
 
   return {
     ok: false,

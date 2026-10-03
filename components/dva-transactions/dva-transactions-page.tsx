@@ -10,6 +10,7 @@ import { ExportDialog } from "@/components/dva-transactions/export-dialog";
 import { DriverLink } from "@/components/people/people-parts";
 import { DateRangePicker, lagosToday } from "@/components/ui/date-range-picker";
 import { Modal, ModalActions } from "@/components/ui/modal";
+import { useToast } from "@/components/ui/toast";
 import { ApiError } from "@/lib/api/browser";
 import {
   getDvaTransaction,
@@ -205,6 +206,7 @@ export function DvaTransactionsPage() {
   const router = useRouter();
   const pathname = usePathname();
   const queryClient = useQueryClient();
+  const toast = useToast();
   const [page, setPage] = useState(() => {
     if (typeof window === "undefined") return 1;
     const value = Number(new URLSearchParams(window.location.search).get("page"));
@@ -230,7 +232,6 @@ export function DvaTransactionsPage() {
     return new URLSearchParams(window.location.search).get("dateTo") ?? lagosToday();
   });
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [resyncedAccount, setResyncedAccount] = useState<VirtualAccount | null>(null);
   const [confirmAll, setConfirmAll] = useState("");
   const [bulkResult, setBulkResult] = useState<BulkResyncResponse | null>(null);
@@ -300,25 +301,25 @@ export function DvaTransactionsPage() {
     mutationFn: (id: string) => resyncDriverDva(id),
     onSuccess: (account) => {
       setResyncedAccount(account);
-      setNotice("Driver bank account recreated. Tell the driver to use the new account numbers.");
+      toast.success("Driver bank account recreated. Tell the driver to use the new account numbers.");
       setMaintenanceOpen(false);
       setResyncMode("choose");
       setDriverSearch("");
       queryClient.invalidateQueries({ queryKey: queryKeys.dvaTransactions.all });
     },
-    onError: (error) => setNotice(error instanceof ApiError ? error.message : "Could not recreate this driver's account."),
+    onError: (error) => toast.error(error instanceof ApiError ? error.message : "Could not recreate this driver's account."),
   });
 
   const bulkResync = useMutation({
     mutationFn: () => resyncAllDriverDvas(),
     onSuccess: (result) => {
       setBulkResult(result);
-      setNotice(`Resynced ${result.succeeded}/${result.total} driver bank accounts.`);
+      toast.success(`Resynced ${result.succeeded}/${result.total} driver bank accounts.`);
       setConfirmAll("");
       setMaintenanceOpen(false);
       setResyncMode("choose");
     },
-    onError: (error) => setNotice(error instanceof ApiError ? error.message : "Bulk resync failed or timed out. Refresh driver records before retrying."),
+    onError: (error) => toast.error(error instanceof ApiError ? error.message : "Bulk resync failed or timed out. Refresh driver records before retrying."),
   });
 
   if (!isStaff) return <AccessDenied />;
@@ -373,13 +374,6 @@ export function DvaTransactionsPage() {
           )}
         </div>
       </div>
-
-      {notice && (
-        <div className="flex items-start justify-between gap-3 rounded-lg border border-border bg-surface p-3 text-sm shadow-card">
-          <p>{notice}</p>
-          <button type="button" onClick={() => setNotice(null)} className="text-muted hover:text-foreground">Dismiss</button>
-        </div>
-      )}
 
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         <StatCard label="Total received" value={stats.isLoading ? "..." : naira(stats.data?.total_amount ?? 0)} />
