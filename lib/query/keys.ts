@@ -34,6 +34,12 @@ export const queryKeys = {
     detail: (id: string) => ["dva-transactions", "detail", id] as const,
     stats: (filters: unknown) => ["dva-transactions", "stats", filters] as const,
   },
+  boltReconciliations: {
+    all: ["bolt-reconciliations"] as const,
+    list: (filters: unknown) => ["bolt-reconciliations", "list", filters] as const,
+    detail: (id: string) => ["bolt-reconciliations", "detail", id] as const,
+    entries: (id: string, filters: unknown) => ["bolt-reconciliations", "entries", id, filters] as const,
+  },
   chargeSessions: {
     all: ["charge-sessions"] as const,
     list: (filters: unknown) => ["charge-sessions", "list", filters] as const,

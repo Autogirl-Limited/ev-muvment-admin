@@ -6,6 +6,7 @@ export type NavIcon =
   | "security"
   | "applications"
   | "transactions"
+  | "reconciliation"
   | "chargeSessions"
   | "wallet"
   | "checklists"
@@ -44,6 +45,13 @@ export const NAVIGATION: NavSection[] = [
         href: "/dva-transactions",
         icon: "transactions",
         roles: ["ADMIN", "ACCOUNT_OFFICER", "RELATIONSHIP_OFFICER"],
+      },
+      {
+        // Reconciliations are an accounts job; relationship officers get a 403 from the API.
+        label: "Bolt reconciliation",
+        href: "/bolt-reconciliations",
+        icon: "reconciliation",
+        roles: ["ADMIN", "ACCOUNT_OFFICER"],
       },
       {
         label: "Charge sessions",
