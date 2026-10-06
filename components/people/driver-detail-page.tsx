@@ -340,7 +340,20 @@ export function DriverDetailPage({ id }: { id: string }) {
           {/* Charge sessions */}
           <Card title="Charge sessions" icon="bolt" action={<CardLink href={`/charge-sessions?userId=${id}&dateFrom=&dateTo=`}>View all</CardLink>}>
             <RecentList<ChargeSession> query={chargeSessions} empty="No charging history yet.">
-              {(session) => <Row title={session.charger_id} sub={`Connector ${session.connector_id} · ${formatRelative(session.created_at)} · ${kwh(session.energy_kwh)}`} aside={naira(session.amount)} />}
+              {(session) => (
+                <Row
+                  title={session.charger_id}
+                  sub={`Connector ${session.connector_id} · ${formatRelative(session.created_at)} · ${kwh(session.energy_kwh)}`}
+                  aside={naira(session.amount)}
+                  asideSub={
+                    session.status === "STARTED"
+                      ? "Charging"
+                      : session.refund_amount
+                        ? `${naira(session.refund_amount)} refunded`
+                        : undefined
+                  }
+                />
+              )}
             </RecentList>
           </Card>
 

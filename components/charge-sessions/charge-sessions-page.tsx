@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { usePathname, useRouter } from "next/navigation";
 
 import { AccessDenied } from "@/components/dashboard/access-denied";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DriverLink } from "@/components/people/people-parts";
 import { DateRangePicker, lagosToday } from "@/components/ui/date-range-picker";
@@ -13,7 +14,9 @@ import {
   getChargeSession,
   getChargeSessionStats,
   listChargeSessions,
+  netAmount,
   type ChargeSession,
+  type ChargeSessionStatus,
 } from "@/lib/api/charge-sessions";
 import { listDrivers } from "@/lib/api/staff";
 import { kwh } from "@/lib/format";
@@ -22,6 +25,44 @@ import { useCurrentUser } from "@/lib/query/user";
 
 const PAGE_SIZE = 20;
 const LAGOS = "Africa/Lagos";
+/** Admins don't receive `charge_session.updated`, so poll while a session is still waiting on its LotGrids outcome. */
+const STARTED_POLL_MS = 30_000;
+
+const STATUS_META: Record<ChargeSessionStatus, { label: string; tone: "brand" | "success" | "neutral" }> = {
+  STARTED: { label: "Charging", tone: "brand" },
+  COMPLETED: { label: "Completed", tone: "success" },
+  INTERRUPTED: { label: "Stopped early", tone: "neutral" },
+};
+
+function StatusBadge({ status }: { status: ChargeSessionStatus }) {
+  const meta = STATUS_META[status] ?? { label: status, tone: "neutral" as const };
+  return <Badge tone={meta.tone} dot>{meta.label}</Badge>;
+}
+
+function formatDuration(fromIso: string, toIso: string) {
+  const minutes = Math.max(0, Math.round((new Date(toIso).getTime() - new Date(fromIso).getTime()) / 60_000));
+  if (minutes < 1) return "Under a minute";
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest ? `${hours} h ${rest} min` : `${hours} h`;
+}
+
+function estimatedKwh(value: number | null) {
+  return value === null ? "-" : `≈ ${kwh(value)}`;
+}
+
+/** Debited amount, with the refund called out underneath when a session stopped early. */
+function AmountCell({ session }: { session: ChargeSession }) {
+  return (
+    <>
+      <span className="font-semibold tabular-nums">{naira(session.amount)}</span>
+      {session.refund_amount ? (
+        <span className="block text-xs text-success tabular-nums">−{naira(session.refund_amount)} refunded</span>
+      ) : null}
+    </>
+  );
+}
 
 function formatDateTime(iso: string) {
   return new Intl.DateTimeFormat("en-NG", {
@@ -132,13 +173,16 @@ function SessionCard({ session, driver, onOpen }: { session: ChargeSession; driv
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">{driver}</p>
           <p className="mt-0.5 text-xs text-muted">{formatDateTime(session.created_at)}</p>
+          <div className="mt-2"><StatusBadge status={session.status} /></div>
         </div>
-        <p className="shrink-0 text-right text-lg font-semibold tabular-nums">{naira(session.amount)}</p>
+        <div className="shrink-0 text-right text-lg">
+          <AmountCell session={session} />
+        </div>
       </div>
       <div className="mt-4 grid gap-2 text-sm">
         <div className="rounded-lg bg-subtle/70 p-3">
           <p className="text-xs text-muted">Energy</p>
-          <p className="mt-1 font-semibold tabular-nums">{kwh(session.energy_kwh)}</p>
+          <p className="mt-1 font-semibold tabular-nums">{estimatedKwh(session.energy_kwh)}</p>
         </div>
         <div className="rounded-lg bg-subtle/70 p-3">
           <p className="text-xs text-muted">Charger</p>
@@ -211,6 +255,8 @@ export function ChargeSessionsPage() {
     queryFn: ({ signal }) => listChargeSessions(filters, signal),
     enabled: isStaff && (!dateFrom || !dateTo || dateFrom <= dateTo),
     refetchOnWindowFocus: true,
+    refetchInterval: (query) =>
+      query.state.data?.items.some((session) => session.status === "STARTED") ? STARTED_POLL_MS : false,
   });
 
   const stats = useQuery({
@@ -230,6 +276,7 @@ export function ChargeSessionsPage() {
     queryKey: queryKeys.chargeSessions.detail(selectedId ?? ""),
     queryFn: ({ signal }) => getChargeSession(selectedId!, signal),
     enabled: Boolean(selectedId),
+    refetchInterval: (query) => (query.state.data?.status === "STARTED" ? STARTED_POLL_MS : false),
   });
 
   if (!isStaff) return <AccessDenied />;
@@ -269,12 +316,16 @@ export function ChargeSessionsPage() {
       keepGoing = result.pagination.has_next;
       exportPage += 1;
     }
-    const header = ["id", "created_at", "user_id", "charger_id", "connector_id", "amount", "remaining_balance", "energy_kwh", "lotgrids_session_id"];
+    const header = [
+      "id", "created_at", "ended_at", "status", "user_id", "charger_id", "connector_id", "amount",
+      "actual_dispensed_value", "refund_amount", "net_amount", "remaining_balance", "energy_kwh", "lotgrids_session_id",
+    ];
     const csv = [
       header.join(","),
-      ...rows.map((session) =>
-        header.map((key) => JSON.stringify(String(session[key as keyof ChargeSession] ?? ""))).join(","),
-      ),
+      ...rows.map((session) => {
+        const row: Record<string, unknown> = { ...session, net_amount: netAmount(session) };
+        return header.map((key) => JSON.stringify(String(row[key] ?? ""))).join(",");
+      }),
     ].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -292,7 +343,7 @@ export function ChargeSessionsPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Charge sessions</h1>
           <p className="mt-1 text-sm text-muted">
-            Every confirmed debit that started a charge — the money-out ledger, mirroring wallet top-ups.
+            Every debit that started a charge, with its outcome and any refund — the money-out ledger, mirroring wallet top-ups.
           </p>
         </div>
         <div className="grid gap-2 sm:flex sm:items-center lg:justify-end">
@@ -308,10 +359,10 @@ export function ChargeSessionsPage() {
       )}
 
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Total spent" value={stats.isLoading ? "..." : naira(stats.data?.total_amount ?? 0)} />
+        <StatCard label="Net spent" value={stats.isLoading ? "..." : naira(stats.data?.total_amount ?? 0)} sub="After refunds for sessions stopped early" />
         <StatCard label="Sessions" value={stats.isLoading ? "..." : String(stats.data?.session_count ?? 0)} />
         <StatCard label="Unique drivers" value={stats.isLoading ? "..." : String(stats.data?.unique_drivers ?? 0)} />
-        <StatCard label="Average spend" value={stats.isLoading ? "..." : naira(Math.round(stats.data?.average_amount ?? 0))} />
+        <StatCard label="Average spend" value={stats.isLoading ? "..." : naira(Math.round(stats.data?.average_amount ?? 0))} sub="Net, per session" />
       </section>
 
       <section className="rounded-lg border border-border bg-surface shadow-card">
@@ -360,11 +411,11 @@ export function ChargeSessionsPage() {
               <tr>
                 <th className="px-4 py-3 font-semibold">Started</th>
                 <th className="px-4 py-3 font-semibold">Driver</th>
+                <th className="px-4 py-3 font-semibold">Status</th>
                 <th className="px-4 py-3 font-semibold">Charger</th>
-                <th className="px-4 py-3 font-semibold">Connector</th>
                 <th className="px-4 py-3 font-semibold">Amount</th>
                 <th className="px-4 py-3 font-semibold">Energy</th>
-                <th className="px-4 py-3 font-semibold">Remaining balance</th>
+                <th className="px-4 py-3 font-semibold">Balance after debit</th>
                 <th className="px-4 py-3 font-semibold">Session ref</th>
               </tr>
             </thead>
@@ -380,10 +431,13 @@ export function ChargeSessionsPage() {
                   <tr key={session.id} onClick={() => setSelectedId(session.id)} className="cursor-pointer border-t border-border transition hover:bg-subtle/60">
                     <td className="px-4 py-3">{formatDateTime(session.created_at)}</td>
                     <td className="px-4 py-3"><DriverLink id={session.user_id}>{driverLabel(session, driverNames)}</DriverLink></td>
-                    <td className="max-w-48 truncate px-4 py-3 font-mono text-xs" title={session.charger_id}>{session.charger_id}</td>
-                    <td className="px-4 py-3">{session.connector_id}</td>
-                    <td className="px-4 py-3 font-semibold tabular-nums">{naira(session.amount)}</td>
-                    <td className="px-4 py-3 tabular-nums">{kwh(session.energy_kwh)}</td>
+                    <td className="px-4 py-3"><StatusBadge status={session.status} /></td>
+                    <td className="max-w-48 px-4 py-3" title={session.charger_id}>
+                      <span className="block truncate font-mono text-xs">{session.charger_id}</span>
+                      <span className="block text-xs text-muted">Connector {session.connector_id}</span>
+                    </td>
+                    <td className="px-4 py-3"><AmountCell session={session} /></td>
+                    <td className="px-4 py-3 tabular-nums">{estimatedKwh(session.energy_kwh)}</td>
                     <td className="px-4 py-3 tabular-nums">{naira(session.remaining_balance)}</td>
                     <td className="max-w-40 truncate px-4 py-3 font-mono text-xs">{session.lotgrids_session_id}</td>
                   </tr>
@@ -411,10 +465,44 @@ export function ChargeSessionsPage() {
           <div className="h-40 animate-pulse rounded-lg bg-subtle" />
         ) : selected ? (
           <div className="space-y-4">
-            <div className="rounded-lg bg-danger-soft p-4">
-              <p className="text-2xl font-semibold text-danger">{naira(selected.amount)}</p>
-              <p className="mt-1 text-sm text-muted">Started {formatDateTime(selected.created_at)}</p>
+            <div className="rounded-lg bg-subtle/60 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs text-muted">{selected.status === "STARTED" ? "Debited" : "Net paid"}</p>
+                  <p className="mt-1 text-2xl font-semibold tabular-nums">
+                    {naira(selected.status === "STARTED" ? selected.amount : netAmount(selected))}
+                  </p>
+                </div>
+                <StatusBadge status={selected.status} />
+              </div>
+              <p className="mt-2 text-sm text-muted">
+                Started {formatDateTime(selected.created_at)}
+                {selected.ended_at && ` · ended ${formatDateTime(selected.ended_at)} (${formatDuration(selected.created_at, selected.ended_at)})`}
+              </p>
             </div>
+
+            {selected.status !== "STARTED" && (
+              <div className="rounded-lg border border-border p-3 text-sm">
+                <p className="mb-2 text-xs font-medium uppercase text-muted">Outcome</p>
+                <dl className="space-y-1.5">
+                  {[
+                    ["Debited at start", naira(selected.amount)],
+                    ["Dispensed", selected.actual_dispensed_value === null ? "-" : naira(selected.actual_dispensed_value)],
+                    ["Refunded to wallet", naira(selected.refund_amount ?? 0)],
+                  ].map(([label, value]) => (
+                    <div key={label} className="flex justify-between gap-3">
+                      <dt className="text-muted">{label}</dt>
+                      <dd className="tabular-nums">{value}</dd>
+                    </div>
+                  ))}
+                  <div className="flex justify-between gap-3 border-t border-border pt-1.5 font-semibold">
+                    <dt>Net paid</dt>
+                    <dd className="tabular-nums">{naira(netAmount(selected))}</dd>
+                  </div>
+                </dl>
+              </div>
+            )}
+
             <dl className="grid gap-3 text-sm sm:grid-cols-2">
               {[
                 ["Driver", driverLabel(selected, driverNames)],
@@ -422,9 +510,8 @@ export function ChargeSessionsPage() {
                 ...(selected.driver?.phone_number ? [["Phone", selected.driver.phone_number]] : []),
                 ["Charger", selected.charger_id],
                 ["Connector", selected.connector_id],
-                ["Energy", kwh(selected.energy_kwh)],
-                ["Remaining balance", naira(selected.remaining_balance)],
-                ["Recorded", formatDateTime(selected.created_at)],
+                ["Energy (estimated)", estimatedKwh(selected.energy_kwh)],
+                ["Balance after debit", naira(selected.remaining_balance)],
               ].map(([label, value]) => (
                 <div key={label} className="rounded-lg bg-subtle/60 p-3">
                   <dt className="text-xs text-muted">{label}</dt>
@@ -442,7 +529,12 @@ export function ChargeSessionsPage() {
               </div>
             </div>
             <p className="rounded-lg bg-subtle p-3 text-sm text-muted">
-              This is spend, not a live session — there&apos;s no end time or dispensed-vs-debited detail. Any refund for an interrupted charge lands in the driver&apos;s balance directly and isn&apos;t reflected here.
+              {selected.status === "STARTED"
+                ? "Still charging, or LotGrids hasn't reported the outcome yet. This refreshes automatically; if it stays here long after the driver unplugged, check the LotGrids webhook."
+                : selected.status === "INTERRUPTED"
+                  ? "Stopped before the full amount was dispensed. The undispensed part was refunded to the driver's EV wallet automatically."
+                  : "Dispensed in full, so no refund was due."}{" "}
+              Energy is priced from the net spend at the rate in force when the session started, not a meter reading.
             </p>
           </div>
         ) : (

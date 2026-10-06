@@ -10,6 +10,13 @@ export interface ChargeSessionDriver {
   email: string | null;
 }
 
+/**
+ * Outcome of a session (2026-09-25). `STARTED` until LotGrids reports back by
+ * webhook, then `COMPLETED` (dispensed in full) or `INTERRUPTED` (stopped early,
+ * the undispensed part refunded to the driver's wallet).
+ */
+export type ChargeSessionStatus = "STARTED" | "COMPLETED" | "INTERRUPTED";
+
 export interface ChargeSession {
   id: string;
   created_at: string;
@@ -27,7 +34,14 @@ export interface ChargeSession {
   amount: number;
   /** Computed by this API from the pre-debit balance minus `amount`, not passed through from LotGrids. */
   remaining_balance: number;
-  /** Priced energy implied by `amount` and the rate in force at `created_at`; `null` for sessions before any rate existed. */
+  status: ChargeSessionStatus;
+  /** Naira worth of energy the charger actually dispensed; `null` while STARTED. */
+  actual_dispensed_value: number | null;
+  /** Naira refunded to the driver's wallet; `null` while STARTED, 0 when COMPLETED. */
+  refund_amount: number | null;
+  /** When LotGrids reported the session ended; `null` while STARTED. */
+  ended_at: string | null;
+  /** Priced energy implied by the net spend (`amount - refund_amount`) at the rate in force at `created_at`; `null` for sessions before any rate existed. */
   energy_kwh: number | null;
 }
 
@@ -35,9 +49,11 @@ export interface ChargeSessionStats {
   user_id: string | null;
   date_from: string | null;
   date_to: string | null;
+  /** Net of interrupted-session refunds. */
   total_amount: number;
   session_count: number;
   unique_drivers: number;
+  /** Average net amount per session. */
   average_amount: number;
 }
 
@@ -65,4 +81,9 @@ export function getChargeSession(id: string, signal?: AbortSignal) {
 
 export function getChargeSessionStats(params: ChargeSessionStatsParams, signal?: AbortSignal) {
   return apiFetch<ChargeSessionStats>(`/charge-sessions/stats${toQuery(params)}`, { signal });
+}
+
+/** What the driver actually paid: the debit less any refund. */
+export function netAmount(session: ChargeSession) {
+  return session.amount - (session.refund_amount ?? 0);
 }
