@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -28,14 +29,34 @@ const LAGOS = "Africa/Lagos";
 /** Admins don't receive `charge_session.updated`, so poll while a session is still waiting on its LotGrids outcome. */
 const STARTED_POLL_MS = 30_000;
 
-const STATUS_META: Record<ChargeSessionStatus, { label: string; tone: "brand" | "success" | "neutral" }> = {
+/**
+ * A session still `STARTED` after this long is treated as having no outcome rather than "Charging":
+ * either it predates outcome tracking (those rows stay `STARTED` forever) or LotGrids' single,
+ * never-retried webhook delivery was missed. No real charge runs this long.
+ */
+const OUTCOME_GIVE_UP_MS = 12 * 60 * 60 * 1000;
+
+type DisplayStatus = ChargeSessionStatus | "NO_OUTCOME";
+
+const STATUS_META: Record<DisplayStatus, { label: string; tone: "brand" | "success" | "neutral" | "danger" }> = {
   STARTED: { label: "Charging", tone: "brand" },
   COMPLETED: { label: "Completed", tone: "success" },
   INTERRUPTED: { label: "Stopped early", tone: "neutral" },
+  NO_OUTCOME: { label: "No outcome", tone: "danger" },
 };
 
-function StatusBadge({ status }: { status: ChargeSessionStatus }) {
-  const meta = STATUS_META[status] ?? { label: status, tone: "neutral" as const };
+function displayStatus(session: ChargeSession, now = Date.now()): DisplayStatus {
+  if (session.status !== "STARTED") return session.status;
+  return now - new Date(session.created_at).getTime() > OUTCOME_GIVE_UP_MS ? "NO_OUTCOME" : "STARTED";
+}
+
+/** Still waiting on LotGrids, so worth polling. */
+function isCharging(session: ChargeSession) {
+  return displayStatus(session) === "STARTED";
+}
+
+function StatusBadge({ session }: { session: ChargeSession }) {
+  const meta = STATUS_META[displayStatus(session)] ?? { label: session.status, tone: "neutral" as const };
   return <Badge tone={meta.tone} dot>{meta.label}</Badge>;
 }
 
@@ -173,7 +194,7 @@ function SessionCard({ session, driver, onOpen }: { session: ChargeSession; driv
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">{driver}</p>
           <p className="mt-0.5 text-xs text-muted">{formatDateTime(session.created_at)}</p>
-          <div className="mt-2"><StatusBadge status={session.status} /></div>
+          <div className="mt-2"><StatusBadge session={session} /></div>
         </div>
         <div className="shrink-0 text-right text-lg">
           <AmountCell session={session} />
@@ -256,7 +277,7 @@ export function ChargeSessionsPage() {
     enabled: isStaff && (!dateFrom || !dateTo || dateFrom <= dateTo),
     refetchOnWindowFocus: true,
     refetchInterval: (query) =>
-      query.state.data?.items.some((session) => session.status === "STARTED") ? STARTED_POLL_MS : false,
+      query.state.data?.items.some(isCharging) ? STARTED_POLL_MS : false,
   });
 
   const stats = useQuery({
@@ -276,7 +297,7 @@ export function ChargeSessionsPage() {
     queryKey: queryKeys.chargeSessions.detail(selectedId ?? ""),
     queryFn: ({ signal }) => getChargeSession(selectedId!, signal),
     enabled: Boolean(selectedId),
-    refetchInterval: (query) => (query.state.data?.status === "STARTED" ? STARTED_POLL_MS : false),
+    refetchInterval: (query) => (query.state.data && isCharging(query.state.data) ? STARTED_POLL_MS : false),
   });
 
   if (!isStaff) return <AccessDenied />;
@@ -359,7 +380,7 @@ export function ChargeSessionsPage() {
       )}
 
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Net spent" value={stats.isLoading ? "..." : naira(stats.data?.total_amount ?? 0)} sub="After refunds for sessions stopped early" />
+        <StatCard label="Net spent" value={stats.isLoading ? "..." : naira(stats.data?.total_amount ?? 0)} sub="After refunds. Sessions still charging count in full" />
         <StatCard label="Sessions" value={stats.isLoading ? "..." : String(stats.data?.session_count ?? 0)} />
         <StatCard label="Unique drivers" value={stats.isLoading ? "..." : String(stats.data?.unique_drivers ?? 0)} />
         <StatCard label="Average spend" value={stats.isLoading ? "..." : naira(Math.round(stats.data?.average_amount ?? 0))} sub="Net, per session" />
@@ -431,7 +452,7 @@ export function ChargeSessionsPage() {
                   <tr key={session.id} onClick={() => setSelectedId(session.id)} className="cursor-pointer border-t border-border transition hover:bg-subtle/60">
                     <td className="px-4 py-3">{formatDateTime(session.created_at)}</td>
                     <td className="px-4 py-3"><DriverLink id={session.user_id}>{driverLabel(session, driverNames)}</DriverLink></td>
-                    <td className="px-4 py-3"><StatusBadge status={session.status} /></td>
+                    <td className="px-4 py-3"><StatusBadge session={session} /></td>
                     <td className="max-w-48 px-4 py-3" title={session.charger_id}>
                       <span className="block truncate font-mono text-xs">{session.charger_id}</span>
                       <span className="block text-xs text-muted">Connector {session.connector_id}</span>
@@ -473,7 +494,7 @@ export function ChargeSessionsPage() {
                     {naira(selected.status === "STARTED" ? selected.amount : netAmount(selected))}
                   </p>
                 </div>
-                <StatusBadge status={selected.status} />
+                <StatusBadge session={selected} />
               </div>
               <p className="mt-2 text-sm text-muted">
                 Started {formatDateTime(selected.created_at)}
@@ -529,13 +550,20 @@ export function ChargeSessionsPage() {
               </div>
             </div>
             <p className="rounded-lg bg-subtle p-3 text-sm text-muted">
-              {selected.status === "STARTED"
-                ? "Still charging, or LotGrids hasn't reported the outcome yet. This refreshes automatically; if it stays here long after the driver unplugged, check the LotGrids webhook."
+              {displayStatus(selected) === "STARTED"
+                ? "Still charging, or LotGrids hasn't reported the outcome yet. This refreshes automatically. In the sandbox the outcome arrives about a minute after the start."
+                : displayStatus(selected) === "NO_OUTCOME"
+                  ? "LotGrids never reported how this session ended. Either it was started before outcome tracking began, or the one-time webhook delivery was missed. Any refund still reached the driver's LotGrids wallet, and their balance here corrects itself at their next quote. Until then it counts at the full debited amount in the totals."
                 : selected.status === "INTERRUPTED"
                   ? "Stopped before the full amount was dispensed. The undispensed part was refunded to the driver's EV wallet automatically."
                   : "Dispensed in full, so no refund was due."}{" "}
               Energy is priced from the net spend at the rate in force when the session started, not a meter reading.
             </p>
+            {isAdmin && displayStatus(selected) === "NO_OUTCOME" && (
+              <Link href="/configurations/lotgrids" className="inline-flex text-sm font-medium text-brand hover:underline">
+                Check the LotGrids webhook
+              </Link>
+            )}
           </div>
         ) : (
           <p className="text-sm text-muted">Session not found.</p>

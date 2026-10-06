@@ -9,6 +9,7 @@ import { Icon, type IconName } from "@/components/dashboard/screen-kit";
 import { naira } from "@/lib/format";
 import { LIST_PAGE_SIZE } from "@/lib/query/cache";
 import { configQueries } from "@/lib/query/configuration";
+import { useFleetBalance } from "@/lib/query/lotgrids";
 import { useCurrentUser } from "@/lib/query/user";
 
 interface Stat {
@@ -94,6 +95,7 @@ export function ConfigurationsHub() {
   const checklist = useQuery({ ...configQueries.checklistSettings(), enabled: isStaff });
   const groups = useQuery({ ...configQueries.groups(first), enabled: isStaff });
   const states = useQuery({ ...configQueries.states(first), enabled: isStaff });
+  const fleet = useFleetBalance(isAdmin);
 
   // Data only admins can read is warmed when a card is hovered or focused.
   const queryClient = useQueryClient();
@@ -171,6 +173,16 @@ export function ConfigurationsHub() {
           badge={isAdmin ? undefined : "View only"}
           stats={[{ label: "States", value: total(states.data) }]}
         />
+        {isAdmin && (
+          <ConfigCard
+            href="/configurations/lotgrids"
+            icon="wallet"
+            title="LotGrids"
+            description="The charging provider: check the fleet wallet that funds driver wallets, connect the webhook that records how each charge ended, and use sandbox tools on a test key."
+            badge={fleet.data ? (fleet.data.sandbox ? "Sandbox" : "Live") : undefined}
+            stats={[{ label: "Fleet wallet", value: fleet.isError ? "Unavailable" : fleet.data ? naira(fleet.data.wallet_balance) : undefined }]}
+          />
+        )}
       </div>
     </div>
   );

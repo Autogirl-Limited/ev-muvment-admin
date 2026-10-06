@@ -12,6 +12,7 @@ import { ActiveBadge, Avatar, Card, CardLink, CopyButton, InfoRow, ShiftBadge } 
 import { DeleteUserDialog, ResetCredentialsDialog, ToggleActiveDialog } from "@/components/people/user-actions";
 import { AssignVehicleDialog, UnassignVehicleDialog } from "@/components/people/vehicle-dialogs";
 import { FreeGrantDialog } from "@/components/wallet/ev-wallet-page";
+import { SandboxDriverBalanceDialog } from "@/components/configurations/lotgrids-page";
 import { lagosToday } from "@/components/ui/date-range-picker";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +30,7 @@ import { CACHE } from "@/lib/query/cache";
 import { queryKeys } from "@/lib/query/keys";
 import { useCurrentUser } from "@/lib/query/user";
 import { useManagedUser } from "@/lib/query/users";
+import { useFleetBalance } from "@/lib/query/lotgrids";
 
 const RECENT = 5;
 
@@ -104,8 +106,10 @@ export function DriverDetailPage({ id }: { id: string }) {
   const query = useManagedUser(id, isAdmin);
   const driver = query.data;
   const guards = useUserGuards(driver);
+  // Sandbox tools only exist on a LotGrids test key.
+  const sandbox = useFleetBalance(isAdmin).data?.sandbox === true;
 
-  const [dialog, setDialog] = useState<"grant" | "assign" | "unassign" | "credentials" | "active" | "delete" | null>(null);
+  const [dialog, setDialog] = useState<"grant" | "sandbox" | "assign" | "unassign" | "credentials" | "active" | "delete" | null>(null);
   const close = () => setDialog(null);
 
   // A staff id typed into /drivers/… belongs on the staff page.
@@ -212,6 +216,7 @@ export function DriverDetailPage({ id }: { id: string }) {
     driver.vehicle
       ? { label: "Unassign vehicle", icon: "swap", onSelect: () => setDialog("unassign") }
       : { label: "Assign vehicle", icon: "car", onSelect: () => setDialog("assign"), disabledReason: driver.is_active ? null : "Reactivate this driver first." },
+    ...(sandbox ? [{ label: "Set sandbox balance", icon: "wallet" as const, onSelect: () => setDialog("sandbox") }] : []),
     { label: "Reset credentials", icon: "key", onSelect: () => setDialog("credentials") },
     { label: driver.is_active ? "Deactivate account" : "Reactivate account", icon: driver.is_active ? "userMinus" : "user", onSelect: () => setDialog("active"), disabledReason: driver.is_active ? guards.deactivate : null },
     { label: "Delete driver", icon: "trash", tone: "danger", onSelect: () => setDialog("delete"), disabledReason: guards.remove },
@@ -254,7 +259,7 @@ export function DriverDetailPage({ id }: { id: string }) {
 
       {/* Cross-feature KPIs, each jumping to the filtered screen */}
       <section aria-label="Overview" className="grid gap-3 sm:grid-cols-3">
-        <Tile label="EV wallet" value={naira(driver.ev_wallet_balance)} hint="As of last top-up · open ledger" href={`/wallet?userId=${id}&range=all`} />
+        <Tile label="EV wallet" value={naira(driver.ev_wallet_balance)} hint="Synced with LotGrids on top-ups, charges and refunds · open ledger" href={`/wallet?userId=${id}&range=all`} />
         <Tile
           label="Awaiting allocation"
           value={awaiting.data?.pagination.total_items ?? 0}
@@ -407,6 +412,7 @@ export function DriverDetailPage({ id }: { id: string }) {
       </div>
 
       <FreeGrantDialog open={dialog === "grant"} onClose={close} onChanged={() => queryClient.invalidateQueries({ queryKey: queryKeys.users.all })} presetDriver={driver} />
+      {sandbox && <SandboxDriverBalanceDialog open={dialog === "sandbox"} onClose={close} driver={driver} />}
       <AssignVehicleDialog driver={dialog === "assign" ? driver : null} onClose={close} />
       <UnassignVehicleDialog driver={dialog === "unassign" ? driver : null} onClose={close} />
       <ResetCredentialsDialog user={dialog === "credentials" ? driver : null} onClose={close} />

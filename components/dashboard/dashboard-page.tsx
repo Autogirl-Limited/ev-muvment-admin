@@ -13,6 +13,7 @@ import type { AttentionItem, DashboardInterval, FinancialSummary, Metric, Overvi
 import { formatDate, formatRelative, naira } from "@/lib/format";
 import { queryKeys } from "@/lib/query/keys";
 import { useDashboardQueries } from "@/lib/query/dashboard";
+import { useFleetBalance } from "@/lib/query/lotgrids";
 import { useCurrentUser } from "@/lib/query/user";
 
 const SLICE_COLORS: Record<string, string> = {
@@ -105,7 +106,8 @@ function HeroMetric({ label, value, detail, icon }: { label: string; value: stri
   );
 }
 
-function OverviewGrid({ overview }: { overview: Overview }) {
+/** `fleet` is the LotGrids fleet wallet, admin only: allocations stall when it runs dry, so it sits beside that count. */
+function OverviewGrid({ overview, fleet }: { overview: Overview; fleet?: { wallet_balance: number; sandbox: boolean } }) {
   return (
     <div className="grid w-full min-w-0 grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-4">
       <HeroMetric
@@ -124,7 +126,11 @@ function OverviewGrid({ overview }: { overview: Overview }) {
         icon="wallet"
         label="Awaiting allocation"
         value={formatNumber(overview.awaiting_allocation)}
-        detail={`${formatNumber(overview.pending_applications)} pending driver applications`}
+        detail={
+          fleet
+            ? `Fleet wallet ${naira(fleet.wallet_balance)}${fleet.sandbox ? " (sandbox)" : ""} · ${formatNumber(overview.pending_applications)} pending applications`
+            : `${formatNumber(overview.pending_applications)} pending driver applications`
+        }
       />
       <HeroMetric
         icon="bolt"
@@ -358,6 +364,7 @@ export function DashboardPage() {
   const currentUser = useCurrentUser();
   const isStaff = currentUser.user_type === "ADMIN" || currentUser.user_type === "ACCOUNT_OFFICER" || currentUser.user_type === "RELATIONSHIP_OFFICER";
   const isAdmin = currentUser.user_type === "ADMIN";
+  const fleet = useFleetBalance(isAdmin);
   const [range, setRange] = useState(initialRange);
   const interval: DashboardInterval = "day";
   const queryClient = useQueryClient();
@@ -415,7 +422,7 @@ export function DashboardPage() {
         </div>
       ) : (
         <>
-          {overview && <OverviewGrid overview={overview} />}
+          {overview && <OverviewGrid overview={overview} fleet={fleet.data} />}
           <div className="grid w-full min-w-0 grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1fr)_24rem]">
             <div className="w-full min-w-0 space-y-4">
               {summary && <FinancialCards summary={summary} />}

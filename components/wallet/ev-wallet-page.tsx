@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ConfigPageHeader, EmptyState, ErrorState, SearchInput, SkeletonRows } from "@/components/dashboard/screen-kit";
@@ -33,6 +34,7 @@ import { useDebounced } from "@/lib/hooks/use-debounced";
 import { useNow } from "@/lib/hooks/use-now";
 import { useUrlState } from "@/lib/hooks/use-url-state";
 import { queryKeys } from "@/lib/query/keys";
+import { useFleetBalance } from "@/lib/query/lotgrids";
 import { useCurrentUser } from "@/lib/query/user";
 import { useToast } from "@/components/ui/toast";
 
@@ -158,10 +160,13 @@ export function EVWalletPage() {
     [queueQuery.data],
   );
   const queueTotal = queue.reduce((sum, allocation) => sum + allocation.amount, 0);
+  const fleet = useFleetBalance(isAdmin);
 
   const refreshWallet = () => {
     queryClient.invalidateQueries({ queryKey: queryKeys.walletAllocations.all });
     queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
+    // Grants and retries draw on the fleet wallet.
+    queryClient.invalidateQueries({ queryKey: queryKeys.lotgrids.all });
   };
 
   const applyRange = ({ from, to }: { from: string; to: string }) => {
@@ -206,6 +211,8 @@ export function EVWalletPage() {
           <AllocationQueue
             allocations={queue}
             total={queueTotal}
+            fleetBalance={fleet.data?.wallet_balance}
+            fleetSandbox={fleet.data?.sandbox}
             loading={queueQuery.isLoading}
             error={queueQuery.error}
             driverMap={driverMap}
@@ -238,6 +245,8 @@ export function EVWalletPage() {
 function AllocationQueue({
   allocations,
   total,
+  fleetBalance,
+  fleetSandbox,
   loading,
   error,
   driverMap,
@@ -246,6 +255,9 @@ function AllocationQueue({
 }: {
   allocations: WalletAllocation[];
   total: number;
+  /** LotGrids fleet wallet; `undefined` while loading or unavailable. */
+  fleetBalance?: number;
+  fleetSandbox?: boolean;
   loading: boolean;
   error: unknown;
   driverMap: Map<string, DriverOption>;
@@ -262,6 +274,18 @@ function AllocationQueue({
           </div>
           <Badge tone="brand">{naira(total)}</Badge>
         </div>
+        <Link
+          href="/configurations/lotgrids"
+          className="mt-3 flex items-center justify-between gap-3 rounded-lg bg-subtle/70 px-3 py-2 text-sm transition hover:bg-subtle"
+        >
+          <span className="text-muted">Fleet wallet{fleetSandbox ? " (sandbox)" : ""}</span>
+          <span className="font-semibold tabular-nums">{fleetBalance === undefined ? "-" : naira(fleetBalance)}</span>
+        </Link>
+        {fleetBalance !== undefined && allocations.length > 0 && fleetBalance < total && (
+          <p className="mt-2 text-xs text-danger">
+            {naira(total - fleetBalance)} short of covering these. Fund the fleet wallet on the LotGrids Partner Dashboard before retrying.
+          </p>
+        )}
       </div>
       {loading ? (
         <SkeletonRows rows={4} columns={2} />
@@ -447,6 +471,8 @@ export function FreeGrantDialog({ open, onClose, onChanged, presetDriver }: { op
   const [ambiguous, setAmbiguous] = useState(false);
   const debounced = useDebounced(search.trim());
   const numericAmount = Math.floor(Number(amount));
+  const fleet = useFleetBalance(open);
+  const overFleet = fleet.data !== undefined && numericAmount > fleet.data.wallet_balance;
 
   const driversQuery = useQuery({
     queryKey: queryKeys.users.assignableDrivers(debounced),
@@ -466,6 +492,7 @@ export function FreeGrantDialog({ open, onClose, onChanged, presetDriver }: { op
       toast.success("Free grant allocated and wallet credited.");
       queryClient.invalidateQueries({ queryKey: queryKeys.walletAllocations.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.lotgrids.all });
       onChanged();
       setConfirmOpen(false);
       onClose();
@@ -489,7 +516,7 @@ export function FreeGrantDialog({ open, onClose, onChanged, presetDriver }: { op
     },
   });
 
-  const invalid = ambiguous || !driver || !driver.vehicle || !Number.isFinite(numericAmount) || numericAmount <= 0 || notes.length > 500;
+  const invalid = ambiguous || overFleet || !driver || !driver.vehicle || !Number.isFinite(numericAmount) || numericAmount <= 0 || notes.length > 500;
 
   return (
     <>
@@ -551,6 +578,15 @@ export function FreeGrantDialog({ open, onClose, onChanged, presetDriver }: { op
               <p className="mt-1 font-semibold">{previewQuery.data ? `${previewQuery.data.kwh_equivalent.toLocaleString()} kWh at ${naira(previewQuery.data.rate_per_kwh, 2)}/kWh` : "Enter an amount"}</p>
             </div>
           </div>
+          <p className="text-xs text-muted">
+            Fleet wallet{fleet.data?.sandbox ? " (sandbox)" : ""}:{" "}
+            <span className="font-medium tabular-nums text-foreground">{fleet.data ? naira(fleet.data.wallet_balance) : fleet.isError ? "unavailable" : "..."}</span>
+          </p>
+          {overFleet && fleet.data && (
+            <Alert tone="error">
+              The fleet wallet only has {naira(fleet.data.wallet_balance)}, so LotGrids would reject this grant. Fund it on the LotGrids Partner Dashboard first, or grant less.
+            </Alert>
+          )}
           <label className="text-sm font-medium">
             Notes
             <textarea value={notes} onChange={(event) => setNotes(event.target.value.slice(0, 500))} rows={3} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-brand focus:ring-3 focus:ring-brand/20" />
@@ -748,6 +784,7 @@ function RetryAllocationDialog({ allocation, onClose, onChanged }: { allocation:
   const queryClient = useQueryClient();
   const toast = useToast();
   const [error, setError] = useState<string | null>(null);
+  const fleet = useFleetBalance(Boolean(allocation));
   const mutation = useMutation({
     mutationFn: () => retryWalletAllocation(allocation!.id),
     onSuccess: (updated) => {
@@ -783,7 +820,7 @@ function RetryAllocationDialog({ allocation, onClose, onChanged }: { allocation:
       }}
     >
       <p>
-        {allocation ? naira(allocation.amount) : "This amount"} was paid but could not be allocated to the driver on LotGrids. Make sure the fleet wallet on the LotGrids Partner Dashboard has enough balance, then retry. The driver&apos;s wallet is credited as soon as it goes through.
+        {allocation ? naira(allocation.amount) : "This amount"} was paid but could not be allocated to the driver on LotGrids. Make sure the fleet wallet on the LotGrids Partner Dashboard has enough balance{fleet.data ? ` (it has ${naira(fleet.data.wallet_balance)} now)` : ""}, then retry. The driver&apos;s wallet is credited as soon as it goes through.
       </p>
     </ConfirmDialog>
   );

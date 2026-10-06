@@ -53,6 +53,10 @@ export const queryKeys = {
     stats: (filters: unknown) => ["wallet-allocations", "stats", filters] as const,
     queue: ["wallet-allocations", "queue"] as const,
   },
+  lotgrids: {
+    all: ["lotgrids"] as const,
+    fleetBalance: ["lotgrids", "fleet-balance"] as const,
+  },
   notifications: {
     all: ["notifications"] as const,
     list: (filters: unknown) => ["notifications", "list", filters] as const,
