@@ -59,9 +59,10 @@ export async function proxy(request: NextRequest) {
   const mustChange = authToken?.hasChangedTemporaryPassword === false;
 
   // Policy: staff must have two-factor authentication. Recomputed from the
-  // user the API returns on login/refresh.
+  // user the API returns on login/refresh. Waived when an admin offers no
+  // method at all (see EVAuthToken.twoFactorWaived; requireUser re-checks).
   const needs2fa = authToken?.user
-    ? !authToken.user.two_factor_enabled && !authToken.user.totp_enabled
+    ? !authToken.user.two_factor_enabled && !authToken.user.totp_enabled && !authToken.twoFactorWaived
     : false;
 
   const respond = (response: NextResponse) => {

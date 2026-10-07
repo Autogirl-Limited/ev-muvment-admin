@@ -1,10 +1,16 @@
 "use server";
 
 import { apiRequest, type ApiFailure } from "@/lib/api/client";
-import type { TotpSetupResponse, User } from "@/lib/api/types";
+import type {
+  LoginResponse,
+  TotpSetupResponse,
+  TwoFactorMethod,
+  TwoFactorMethods,
+  User,
+} from "@/lib/api/types";
 import { fail, succeed, type ActionResult } from "./action-result";
-import { authedRequest } from "./dal";
-import { updateAuthToken } from "./next-auth-cookie";
+import { authedRequest, getCurrentUser, twoFactorSetupRequired } from "./dal";
+import { readAuthTokenFromCookies, updateAuthToken } from "./next-auth-cookie";
 
 const PASSWORD_MIN = 8;
 const PASSWORD_MAX = 128;
@@ -103,16 +109,20 @@ export async function confirmEmailOtp(input: { code: string }): Promise<ActionRe
 }
 
 /**
- * Policy: 2FA is mandatory, so the last method can never be turned off. The
- * API would allow it, so this is enforced here (and hidden in the UI).
+ * Policy: 2FA is mandatory, so the last method that actually protects the
+ * account can never be turned off. The API would allow it, so this is enforced
+ * here (and hidden in the UI). A method an admin has disabled protects nothing,
+ * so it neither counts as the "other" method nor is blocked from being removed.
  */
 async function refuseIfLastMethod(
   disabling: "email" | "totp",
 ): Promise<Extract<ActionResult, { ok: false }> | null> {
-  const me = await authedRequest<User>("/users/me", { method: "GET" });
-  if (!me.ok) return fromApi(me);
-  const other = disabling === "email" ? me.data.totp_enabled : me.data.two_factor_enabled;
-  return other
+  const result = await authedRequest<TwoFactorMethods>("/auth/2fa/methods", { method: "GET" });
+  if (!result.ok) return fromApi(result);
+  const target: TwoFactorMethod = disabling === "email" ? "EMAIL_OTP" : "TOTP";
+  const usable = result.data.methods.filter((option) => option.is_available && option.is_enrolled);
+  if (!usable.some((option) => option.method === target)) return null;
+  return usable.length > 1
     ? null
     : fail("Two-factor authentication is required. Set up another method before turning this one off.");
 }
@@ -160,4 +170,70 @@ async function refreshUserInAuthToken(): Promise<void> {
   const me = await authedRequest<User>("/users/me", { method: "GET" });
   if (!me.ok) return;
   await updateAuthToken((token) => ({ ...token, user: me.data }));
+}
+
+// ---------------------------------------------------------------------------
+// Choosing a two-factor method (2026-10-07)
+// ---------------------------------------------------------------------------
+
+export async function getTwoFactorMethods(): Promise<ActionResult<TwoFactorMethods>> {
+  const result = await authedRequest<TwoFactorMethods>("/auth/2fa/methods", { method: "GET" });
+  return result.ok ? succeed(result.message, result.data) : fromApi(result);
+}
+
+/** `null` clears the preference (the authenticator app is then asked for first). */
+export async function setPreferredTwoFactorMethod(input: {
+  method: TwoFactorMethod | null;
+}): Promise<ActionResult<TwoFactorMethods>> {
+  const result = await authedRequest<TwoFactorMethods>("/auth/2fa/preferred-method", {
+    method: "PUT",
+    body: { method: input.method },
+  });
+  if (!result.ok) return fromApi(result);
+  await refreshUserInAuthToken();
+  return succeed(result.message, result.data);
+}
+
+/**
+ * Mid-login: switches the pending challenge to another of the user's methods,
+ * or, called with the current method, resends the email code. The API keeps
+ * the same challenge token, so only the method in the cookie changes.
+ */
+export async function switchLoginTwoFactorMethod(input: {
+  method: TwoFactorMethod;
+}): Promise<ActionResult<{ method: TwoFactorMethod; availableMethods: TwoFactorMethod[] }>> {
+  const token = await readAuthTokenFromCookies();
+  const challenge = token?.authStep === "two_factor" ? token.challenge : undefined;
+  if (!challenge) {
+    return { ...fail("Your verification expired. Please sign in again."), challengeExpired: true };
+  }
+
+  const result = await apiRequest<LoginResponse>("/auth/login/two-factor-method", {
+    body: { challenge_token: challenge.token, method: input.method },
+  });
+  if (!result.ok) {
+    const expired = result.message.toLowerCase().includes("login challenge");
+    return { ...fromApi(result), challengeExpired: expired || undefined };
+  }
+
+  const method = result.data.two_factor_method ?? input.method;
+  const availableMethods = result.data.available_two_factor_methods ?? challenge.availableMethods;
+  await updateAuthToken((current) => ({
+    ...current,
+    challenge: current.challenge && { ...current.challenge, method, availableMethods },
+  }));
+  return succeed(result.message, { method, availableMethods });
+}
+
+/**
+ * Lets a staff member past /setup-2fa when an admin offers no two-factor
+ * method at all. Re-checked against the API, never trusted from the client.
+ */
+export async function continueWithoutTwoFactor(): Promise<ActionResult> {
+  const user = await getCurrentUser();
+  if (await twoFactorSetupRequired(user)) {
+    return fail("Two-factor authentication is available again. Set up a method to continue.");
+  }
+  await updateAuthToken((token) => ({ ...token, twoFactorWaived: true }));
+  return succeed("", null);
 }

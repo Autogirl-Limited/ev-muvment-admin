@@ -12,6 +12,8 @@ export type AuthStep = "authenticated" | "two_factor";
 
 export interface TwoFactorSessionChallenge {
   method: TwoFactorMethod;
+  /** Every method the user can finish this challenge with, current one first. */
+  availableMethods: TwoFactorMethod[];
   token: string;
   identifier: string;
 }
@@ -25,6 +27,12 @@ export interface EVAuthToken extends JWT {
   user?: User;
   hasChangedTemporaryPassword?: boolean | null;
   challenge?: TwoFactorSessionChallenge;
+  /**
+   * Set when the user continued past /setup-2fa because an admin offers no
+   * two-factor method at all. Only lifts the proxy's redirect: requireUser()
+   * re-checks against the API, so it stops applying once a method is back on.
+   */
+  twoFactorWaived?: boolean;
   authError?: "RefreshAccessTokenError";
 }
 

@@ -11,6 +11,7 @@ declare module "next-auth" {
     refreshTokenExpires?: number | null;
     hasChangedTemporaryPassword?: boolean | null;
     challengeMethod?: TwoFactorMethod;
+    challengeAvailableMethods?: TwoFactorMethod[];
     challengeToken?: string;
     challengeIdentifier?: string;
   }
@@ -21,6 +22,7 @@ declare module "next-auth" {
     hasChangedTemporaryPassword?: boolean | null;
     twoFactorChallenge?: {
       method: TwoFactorMethod;
+      availableMethods: TwoFactorMethod[];
       token: string;
       identifier: string;
     };

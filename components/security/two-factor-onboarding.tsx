@@ -7,7 +7,8 @@ import { EmailOtpSetup, TotpSetup, useSubmit } from "@/components/security/two-f
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { Alert } from "@/components/ui/alert";
 import type { TotpSetupResponse } from "@/lib/api/types";
-import { requestEmailOtp, setupTotp } from "@/lib/auth/actions";
+import { Button } from "@/components/ui/button";
+import { continueWithoutTwoFactor, requestEmailOtp, setupTotp } from "@/lib/auth/actions";
 import { DASHBOARD_PATH } from "@/lib/auth/constants";
 
 type Step =
@@ -21,7 +22,16 @@ type Step =
  * turned on a method. Picking a method starts it straight away (generates the
  * secret / sends the code), so the next screen is already useful.
  */
-export function TwoFactorOnboarding({ hasEmail }: { hasEmail: boolean }) {
+export function TwoFactorOnboarding({
+  hasEmail,
+  totpAvailable,
+  emailAvailable,
+}: {
+  hasEmail: boolean;
+  /** Whether an admin currently offers each method; the page only renders this when at least one is. */
+  totpAvailable: boolean;
+  emailAvailable: boolean;
+}) {
   const router = useRouter();
   const [step, setStep] = useState<Step>({ name: "choose" });
   const [picking, setPicking] = useState<"totp" | "email" | null>(null);
@@ -63,31 +73,70 @@ export function TwoFactorOnboarding({ hasEmail }: { hasEmail: boolean }) {
     <div className="space-y-4">
       {error && <Alert tone="error">{error}</Alert>}
 
-      <MethodOption
-        title="Authenticator app"
-        badge="Recommended"
-        description="Use Google Authenticator, 1Password or Authy to generate a code each time you sign in."
-        loading={pending && picking === "totp"}
-        disabled={pending}
-        onClick={() => {
-          setPicking("totp");
-          run(setupTotp, (setup) => setStep({ name: "totp", setup }));
-        }}
-      />
-      <MethodOption
-        title="Email code"
-        description="We email you a 6-digit code each time you sign in."
-        loading={pending && picking === "email"}
-        disabled={pending || !hasEmail}
-        note={hasEmail ? undefined : "Your account has no email address."}
-        onClick={() => {
-          setPicking("email");
-          run(requestEmailOtp, () => setStep({ name: "email" }));
-        }}
-      />
+      {totpAvailable && (
+        <MethodOption
+          title="Authenticator app"
+          badge="Recommended"
+          description="Use Google Authenticator, 1Password or Authy to generate a code each time you sign in."
+          loading={pending && picking === "totp"}
+          disabled={pending}
+          onClick={() => {
+            setPicking("totp");
+            run(setupTotp, (setup) => setStep({ name: "totp", setup }));
+          }}
+        />
+      )}
+      {emailAvailable && (
+        <MethodOption
+          title="Email code"
+          description="We email you a 6-digit code each time you sign in."
+          loading={pending && picking === "email"}
+          disabled={pending || !hasEmail}
+          note={hasEmail ? undefined : "Your account has no email address."}
+          onClick={() => {
+            setPicking("email");
+            run(requestEmailOtp, () => setStep({ name: "email" }));
+          }}
+        />
+      )}
+      {emailAvailable && !totpAvailable && !hasEmail && (
+        <Alert tone="info">
+          Email codes are the only method offered right now, and your account has no email address. Ask an
+          administrator to add one.
+        </Alert>
+      )}
 
       <p className="pt-2 text-center text-sm text-muted">
         Not now? You&apos;ll need to finish this to use the dashboard.{" "}
+        <SignOutButton variant="link">Sign out</SignOutButton>
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Shown instead of the chooser when an admin offers no method at all: the
+ * mandatory-2FA policy can’t be met, so the user may continue without it.
+ * The dashboard sends them back here once a method is turned on again.
+ */
+export function NoTwoFactorMethods() {
+  const router = useRouter();
+  const { error, pending, run } = useSubmit();
+
+  return (
+    <div className="space-y-4">
+      {error && <Alert tone="error">{error}</Alert>}
+      <p className="text-sm text-muted">
+        You can use the dashboard for now. You&apos;ll be asked to set up a method as soon as one is turned back on.
+      </p>
+      <Button
+        fullWidth
+        loading={pending}
+        onClick={() => run(continueWithoutTwoFactor, () => router.replace(DASHBOARD_PATH))}
+      >
+        Continue to the dashboard
+      </Button>
+      <p className="text-center text-sm text-muted">
         <SignOutButton variant="link">Sign out</SignOutButton>
       </p>
     </div>

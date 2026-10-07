@@ -7,6 +7,7 @@ import { AccessDenied } from "@/components/dashboard/access-denied";
 import { Badge } from "@/components/ui/badge";
 import { Icon, type IconName } from "@/components/dashboard/screen-kit";
 import { naira } from "@/lib/format";
+import { authMethodSettingsQuery } from "@/lib/query/auth-settings";
 import { LIST_PAGE_SIZE } from "@/lib/query/cache";
 import { configQueries } from "@/lib/query/configuration";
 import { useFleetBalance } from "@/lib/query/lotgrids";
@@ -96,6 +97,7 @@ export function ConfigurationsHub() {
   const groups = useQuery({ ...configQueries.groups(first), enabled: isStaff });
   const states = useQuery({ ...configQueries.states(first), enabled: isStaff });
   const fleet = useFleetBalance(isAdmin);
+  const twoFactor = useQuery({ ...authMethodSettingsQuery(), enabled: isAdmin });
 
   // Data only admins can read is warmed when a card is hovered or focused.
   const queryClient = useQueryClient();
@@ -173,6 +175,24 @@ export function ConfigurationsHub() {
           badge={isAdmin ? undefined : "View only"}
           stats={[{ label: "States", value: total(states.data) }]}
         />
+        {isAdmin && (
+          <ConfigCard
+            href="/configurations/two-factor-methods"
+            icon="shield"
+            title="Two-factor methods"
+            description="Choose which second sign-in steps are offered (authenticator app, email code). Everyone then picks their preferred one."
+            stats={[
+              {
+                label: "Offered",
+                value: twoFactor.isError
+                  ? "Unavailable"
+                  : twoFactor.data
+                    ? twoFactor.data.filter((item) => item.is_enabled).map((item) => item.label).join(", ") || "None"
+                    : undefined,
+              },
+            ]}
+          />
+        )}
         {isAdmin && (
           <ConfigCard
             href="/configurations/lotgrids"

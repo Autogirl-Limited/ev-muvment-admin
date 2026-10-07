@@ -11,6 +11,7 @@ import { CodeField } from "@/components/ui/code-field";
 import { Field } from "@/components/ui/field";
 import { PasswordField } from "@/components/ui/password-field";
 import type { TwoFactorMethod } from "@/lib/api/types";
+import { switchLoginTwoFactorMethod } from "@/lib/auth/actions";
 import {
   CHANGE_PASSWORD_REQUIRED_PATH,
   DASHBOARD_PATH,
@@ -23,8 +24,15 @@ const RESEND_COOLDOWN_SECONDS = 30;
 
 interface Challenge {
   method: TwoFactorMethod;
+  /** Every method the user can finish with, current one first. */
+  availableMethods: TwoFactorMethod[];
   token: string;
 }
+
+const METHOD_LABELS: Record<TwoFactorMethod, string> = {
+  TOTP: "Use your authenticator app",
+  EMAIL_OTP: "Email me a code",
+};
 
 function maskEmail(identifier: string): string | null {
   const [local, domain] = identifier.split("@");
@@ -35,7 +43,6 @@ function maskEmail(identifier: string): string | null {
 export function LoginForm({ next, notice }: { next?: string; notice?: string }) {
   const router = useRouter();
   const [identifier, setIdentifier] = useState("");
-  // Held in memory only, and only so "Resend code" can re-run the password step.
   const [password, setPassword] = useState("");
   const [challenge, setChallenge] = useState<Challenge | null>(null);
   const [code, setCode] = useState("");
@@ -61,10 +68,9 @@ export function LoginForm({ next, notice }: { next?: string; notice?: string }) 
   async function loadChallengeFromSession() {
     const session = await getSession();
     if (session?.authStep === "two_factor" && session.twoFactorChallenge) {
-      setChallenge({
-        method: session.twoFactorChallenge.method,
-        token: session.twoFactorChallenge.token,
-      });
+      const { method, availableMethods, token } = session.twoFactorChallenge;
+      setChallenge({ method, availableMethods: availableMethods ?? [method], token });
+      setPassword(""); // not needed past this step: switching/resending use the challenge
       return true;
     }
     if (session?.authStep === "authenticated") {
@@ -137,33 +143,33 @@ export function LoginForm({ next, notice }: { next?: string; notice?: string }) 
     });
   }
 
-  function resendCode() {
-    if (!challenge || cooldown > 0 || pending) return;
+  /** Switches the challenge to `method`; with the current email method, this resends the code. */
+  function chooseMethod(method: TwoFactorMethod) {
+    if (!challenge || pending) return;
+    const resending = method === challenge.method;
+    if (resending && cooldown > 0) return;
     setError(null);
     setInfo(null);
     startTransition(async () => {
-      // There's no resend endpoint: signing in again emails a fresh code and
-      // returns a new challenge token that supersedes the old one.
-      const result = await signIn("credentials", {
-        redirect: false,
-        mode: "password",
-        identifier: identifier.trim(),
-        password,
-      });
-      if (result?.error) {
-        setError(result.error);
+      const result = await switchLoginTwoFactorMethod({ method });
+      if (!result.ok) {
+        if (result.challengeExpired) backToCredentials("Your verification expired. Please sign in again.");
+        else setError(result.message);
         return;
       }
-      await loadChallengeFromSession();
+      setChallenge({ ...challenge, method: result.data.method, availableMethods: result.data.availableMethods });
       setCode("");
-      setCooldown(RESEND_COOLDOWN_SECONDS);
-      setInfo("We've sent a new code.");
+      if (result.data.method === "EMAIL_OTP") {
+        setCooldown(RESEND_COOLDOWN_SECONDS);
+        setInfo(resending ? "We've sent a new code." : "We've emailed you a code.");
+      }
     });
   }
 
   if (challenge) {
     const isTotp = challenge.method === "TOTP";
     const masked = maskEmail(identifier.trim());
+    const otherMethods = challenge.availableMethods.filter((method) => method !== challenge.method);
 
     return (
       <form
@@ -207,7 +213,7 @@ export function LoginForm({ next, notice }: { next?: string; notice?: string }) 
           {!isTotp && (
             <button
               type="button"
-              onClick={resendCode}
+              onClick={() => chooseMethod(challenge.method)}
               disabled={cooldown > 0 || pending}
               className="font-medium text-brand hover:underline disabled:cursor-not-allowed disabled:text-muted disabled:no-underline"
             >
@@ -215,6 +221,25 @@ export function LoginForm({ next, notice }: { next?: string; notice?: string }) 
             </button>
           )}
         </div>
+
+        {otherMethods.length > 0 && (
+          <div className="border-t border-border pt-4 text-center text-sm">
+            <p className="text-muted">Can&apos;t use this method?</p>
+            <div className="mt-1 flex flex-wrap justify-center gap-x-4 gap-y-1">
+              {otherMethods.map((method) => (
+                <button
+                  key={method}
+                  type="button"
+                  onClick={() => chooseMethod(method)}
+                  disabled={pending}
+                  className="font-medium text-brand hover:underline disabled:cursor-not-allowed disabled:text-muted disabled:no-underline"
+                >
+                  {METHOD_LABELS[method]}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </form>
     );
   }

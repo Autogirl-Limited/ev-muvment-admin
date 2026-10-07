@@ -62,6 +62,7 @@ async function passwordSignIn(credentials: Record<string, string> | undefined) {
       id: `challenge:${result.data.challenge_token}`,
       authStep: "two_factor",
       challengeMethod: result.data.two_factor_method,
+      challengeAvailableMethods: result.data.available_two_factor_methods ?? [result.data.two_factor_method],
       challengeToken: result.data.challenge_token,
       challengeIdentifier: identifier,
     } satisfies NextAuthUser;
@@ -131,6 +132,7 @@ export const authOptions: NextAuthOptions = {
           authStep: "two_factor",
           challenge: {
             method: user.challengeMethod!,
+            availableMethods: user.challengeAvailableMethods ?? [user.challengeMethod!],
             token: user.challengeToken!,
             identifier: user.challengeIdentifier!,
           },

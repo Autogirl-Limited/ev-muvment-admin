@@ -4,7 +4,7 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 
 import { apiRequest, type ApiResult } from "@/lib/api/client";
-import type { User, UserType } from "@/lib/api/types";
+import type { TwoFactorMethods, User, UserType } from "@/lib/api/types";
 import {
   CHANGE_PASSWORD_REQUIRED_PATH,
   LOGIN_PATH,
@@ -33,7 +33,7 @@ const MISSING_CREDENTIAL_MESSAGES = ["Not authenticated", "Invalid authenticatio
  */
 export async function authedRequest<T = null>(
   path: string,
-  init: { method?: "GET" | "POST" | "PATCH" | "DELETE"; body?: unknown } = {},
+  init: { method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE"; body?: unknown } = {},
 ): Promise<ApiResult<T>> {
   const token = await readAuthTokenFromCookies();
   if (!token?.accessToken) endSession("expired");
@@ -70,6 +70,26 @@ export const getCurrentUser = cache(async (): Promise<User> => {
   return result.data;
 });
 
+/** `GET /auth/2fa/methods`: which methods the admin offers and which the user has set up. */
+export const getTwoFactorMethods = cache(async (): Promise<TwoFactorMethods> => {
+  const result = await authedRequest<TwoFactorMethods>("/auth/2fa/methods", { method: "GET" });
+  if (!result.ok) {
+    throw new Error(result.message);
+  }
+  return result.data;
+});
+
+/**
+ * Policy: 2FA is mandatory for staff, but only while an admin offers at least
+ * one method. With every method turned off there's nothing to set up, so the
+ * user isn't held at /setup-2fa.
+ */
+export async function twoFactorSetupRequired(user: User): Promise<boolean> {
+  if (hasTwoFactor(user)) return false;
+  const { methods } = await getTwoFactorMethods();
+  return methods.some((option) => option.is_available);
+}
+
 /**
  * Use in pages that need a fully onboarded user: password changed and a second
  * factor set up. The proxy already redirects on the flag cookies, but this is
@@ -79,7 +99,7 @@ export const getCurrentUser = cache(async (): Promise<User> => {
 export async function requireUser(): Promise<User> {
   if (await mustChangePassword()) redirect(CHANGE_PASSWORD_REQUIRED_PATH);
   const user = await getCurrentUser();
-  if (!hasTwoFactor(user)) redirect(SETUP_2FA_PATH);
+  if (await twoFactorSetupRequired(user)) redirect(SETUP_2FA_PATH);
   return user;
 }
 

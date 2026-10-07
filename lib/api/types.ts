@@ -27,6 +27,8 @@ export interface User {
   two_factor_enabled: boolean;
   /** Authenticator-app (TOTP) 2MFA is on. */
   totp_enabled: boolean;
+  /** The method the user chose to be asked for first at login; `null` = no preference. */
+  preferred_two_factor_method: TwoFactorMethod | null;
   /** Driver wallet balance; staff receive 0. */
   ev_wallet_balance: number;
   virtual_account: unknown | null;
@@ -39,6 +41,8 @@ export interface User {
 export interface LoginResponse {
   status: "success" | "two_factor_required";
   two_factor_method: TwoFactorMethod | null;
+  /** Every method the user can finish this challenge with, current one first. `null` on success. */
+  available_two_factor_methods: TwoFactorMethod[] | null;
   challenge_token: string | null;
   user: User | null;
   access_token: string | null;
@@ -51,4 +55,23 @@ export interface LoginResponse {
 export interface TotpSetupResponse {
   secret: string;
   otpauth_url: string;
+}
+
+/** One entry of `GET /auth/2fa/methods` (2026-10-07). */
+export interface TwoFactorMethodOption {
+  method: TwoFactorMethod;
+  label: string;
+  /** An admin offers this method. If false, hide setup; turning it off is still allowed. */
+  is_available: boolean;
+  /** The user has set it up and switched it on. */
+  is_enrolled: boolean;
+  /** Login asks for this method first. */
+  is_preferred: boolean;
+}
+
+/** `GET /auth/2fa/methods` and `PUT /auth/2fa/preferred-method`. */
+export interface TwoFactorMethods {
+  /** What login will actually ask for first (not necessarily a saved choice); `null` = password only. */
+  preferred_method: TwoFactorMethod | null;
+  methods: TwoFactorMethodOption[];
 }

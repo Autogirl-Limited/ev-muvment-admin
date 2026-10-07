@@ -13,6 +13,10 @@
 export const queryKeys = {
   /** The signed-in staff member (`GET /users/me`). */
   me: ["me"] as const,
+  /** The signed-in user's 2FA options (`GET /auth/2fa/methods`). Under `me`, so refreshing the user refreshes it too. */
+  myTwoFactorMethods: ["me", "two-factor-methods"] as const,
+  /** Admin: which 2FA methods the platform offers (`GET /auth-settings/two-factor-methods`). */
+  authMethodSettings: ["auth-settings", "two-factor-methods"] as const,
   dashboard: {
     all: ["dashboard"] as const,
     overview: ["dashboard", "overview"] as const,
