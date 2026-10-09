@@ -9,10 +9,12 @@ interface ModalProps {
   children: ReactNode;
   /** `lg` suits forms and detail views; `md` (default) suits confirmations. */
   size?: "md" | "lg" | "xl";
+  /** `false` while work is in flight: Esc, the backdrop and the close button stop closing it. */
+  dismissible?: boolean;
 }
 
 /** Thin wrapper over the native <dialog>: focus trapping and Esc come for free. */
-export function Modal({ open, onClose, title, children, size = "md" }: ModalProps) {
+export function Modal({ open, onClose, title, children, size = "md", dismissible = true }: ModalProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const width = size === "xl" ? "sm:max-w-4xl" : size === "lg" ? "sm:max-w-2xl" : "sm:max-w-md";
@@ -28,9 +30,13 @@ export function Modal({ open, onClose, title, children, size = "md" }: ModalProp
     <dialog
       ref={ref}
       onClose={onClose}
+      onCancel={(event) => {
+        // Esc: the native dialog would close itself even though `open` stays true.
+        if (!dismissible) event.preventDefault();
+      }}
       aria-labelledby={titleId}
       onClick={(event) => {
-        if (event.target === ref.current) onClose();
+        if (dismissible && event.target === ref.current) onClose();
       }}
       // Short screens (landscape phones): cap the height and scroll inside.
       className={`m-0 mt-auto max-h-[100dvh] h-auto w-full ${width} overflow-y-auto overscroll-contain rounded-t-2xl border border-border bg-surface p-0 text-foreground shadow-card backdrop:bg-black/60 backdrop:backdrop-blur-[2px] open:animate-pop-in sm:m-auto sm:max-h-[calc(100dvh-3rem)] sm:w-[calc(100%-1.5rem)] sm:rounded-2xl`}
@@ -44,8 +50,9 @@ export function Modal({ open, onClose, title, children, size = "md" }: ModalProp
             <button
               type="button"
               onClick={onClose}
+              disabled={!dismissible}
               aria-label="Close"
-              className="-mr-2 -mt-1.5 flex size-9 shrink-0 items-center justify-center rounded-lg text-muted transition hover:bg-subtle hover:text-foreground"
+              className="-mr-2 -mt-1.5 flex size-9 shrink-0 items-center justify-center rounded-lg text-muted transition hover:bg-subtle hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
             >
               <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
                 <path d="M6 6l12 12M18 6L6 18" />

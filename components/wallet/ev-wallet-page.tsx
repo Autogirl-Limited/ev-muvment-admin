@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { ConfigPageHeader, EmptyState, ErrorState, SearchInput, SkeletonRows } from "@/components/dashboard/screen-kit";
+import { ConfigPageHeader, EmptyState, ErrorState, Icon, SearchInput, SkeletonRows } from "@/components/dashboard/screen-kit";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Modal, ModalActions } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
 import { Select } from "@/components/ui/select";
+import { BulkCreditDialog } from "@/components/wallet/bulk-credit-dialog";
 import { ApiError } from "@/lib/api/browser";
 import { type DriverOption, listDriverOptions } from "@/lib/api/configuration";
 import type { Paginated } from "@/lib/api/staff";
@@ -36,6 +37,7 @@ import { useUrlState } from "@/lib/hooks/use-url-state";
 import { queryKeys } from "@/lib/query/keys";
 import { useFleetBalance } from "@/lib/query/lotgrids";
 import { useCurrentUser } from "@/lib/query/user";
+import { useRoster } from "@/lib/query/users";
 import { useToast } from "@/components/ui/toast";
 
 const STATUSES: AllocationStatus[] = ["PENDING_PAYMENT", "AWAITING_ALLOCATION", "COMPLETED", "CANCELLED", "EXPIRED"];
@@ -104,6 +106,7 @@ export function EVWalletPage() {
   const url = useUrlState();
   const queryClient = useQueryClient();
   const [freeGrantOpen, setFreeGrantOpen] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [retryTarget, setRetryTarget] = useState<WalletAllocation | null>(null);
 
@@ -147,14 +150,9 @@ export function EVWalletPage() {
     enabled: isAdmin,
   });
 
-  const driverMapQuery = useQuery({
-    queryKey: queryKeys.users.assignableDrivers("__wallet_names__"),
-    queryFn: ({ signal }) => listDriverOptions("", signal),
-    staleTime: 5 * 60_000,
-    enabled: isAdmin,
-  });
-
-  const driverMap = useMemo(() => new Map((driverMapQuery.data?.items ?? []).map((driver) => [driver.id, driver])), [driverMapQuery.data]);
+  // The full roster, so names resolve for every driver rather than only the first page of them.
+  const roster = useRoster("DRIVER", isAdmin);
+  const driverMap = useMemo(() => new Map<string, DriverOption>((roster.data ?? []).map((driver) => [driver.id, driver])), [roster.data]);
   const queue = useMemo(
     () => [...(queueQuery.data?.items ?? [])].sort((a, b) => new Date(a.paid_at ?? a.created_at).getTime() - new Date(b.paid_at ?? b.created_at).getTime()),
     [queueQuery.data],
@@ -184,7 +182,18 @@ export function EVWalletPage() {
         actions={
           <>
             <DateRangePicker compact align="end" from={dateFrom} to={dateTo} onApply={applyRange} className="min-w-full sm:min-w-0 sm:w-72" />
-            {isAdmin && <Button onClick={() => setFreeGrantOpen(true)}>Free grant</Button>}
+            {isAdmin && (
+              <Button variant="secondary" onClick={() => setFreeGrantOpen(true)}>
+                <Icon name="user" className="size-4" />
+                Free grant
+              </Button>
+            )}
+            {isAdmin && (
+              <Button onClick={() => setBulkOpen(true)}>
+                <Icon name="users" className="size-4" />
+                Bulk credit
+              </Button>
+            )}
           </>
         }
       />
@@ -225,7 +234,7 @@ export function EVWalletPage() {
             error={ledgerQuery.error}
             status={status}
             type={type}
-            driver={userId ? driverMap.get(userId) : undefined}
+            driverId={userId}
             driverMap={driverMap}
             onRetry={() => ledgerQuery.refetch()}
             onPage={(page) => url.set({ page })}
@@ -235,6 +244,7 @@ export function EVWalletPage() {
         </div>
       )}
 
+      {isAdmin && <BulkCreditDialog open={bulkOpen} onClose={() => setBulkOpen(false)} />}
       {isAdmin && <FreeGrantDialog open={freeGrantOpen} onClose={() => setFreeGrantOpen(false)} onChanged={refreshWallet} />}
       {isAdmin && <AllocationDetail id={detailId} onClose={() => setDetailId(null)} driver={detailId ? driverMap.get(ledgerQuery.data?.items.find((item) => item.id === detailId)?.user_id ?? "") : undefined} />}
       {isAdmin && <RetryAllocationDialog allocation={retryTarget} onClose={() => setRetryTarget(null)} onChanged={refreshWallet} />}
@@ -325,7 +335,7 @@ function Ledger({
   error,
   status,
   type,
-  driver,
+  driverId,
   driverMap,
   onRetry,
   onPage,
@@ -337,7 +347,7 @@ function Ledger({
   error: unknown;
   status: string;
   type: string;
-  driver?: DriverOption;
+  driverId: string;
   driverMap: Map<string, DriverOption>;
   onRetry: () => void;
   onPage: (page: number) => void;
@@ -345,18 +355,31 @@ function Ledger({
   onOpen: (id: string) => void;
 }) {
   const [driverPickerOpen, setDriverPickerOpen] = useState(false);
+  const filtered = Boolean(status || type || driverId);
+  const driverName = (id: string) => {
+    const found = driverMap.get(id);
+    return found ? driverLabel(found) : `Driver ${shortId(id)}`;
+  };
 
   return (
-    <section className="rounded-lg border border-border bg-surface">
+    <section className="min-w-0 rounded-lg border border-border bg-surface">
       <div className="space-y-3 border-b border-border p-4">
-        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-          <div>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
             <h2 className="font-semibold">Wallet ledger</h2>
-            <p className="mt-1 text-sm text-muted">Server filters by status, type and driver.</p>
+            <p className="mt-1 text-sm text-muted">Every free grant and paid top-up, newest first.</p>
           </div>
-          <Button variant="secondary" onClick={() => onFilter({ status: null, type: null, userId: null, page: null })}>Clear filters</Button>
+          {filtered && (
+            <button
+              type="button"
+              onClick={() => onFilter({ status: null, type: null, userId: null, page: null })}
+              className="shrink-0 rounded-md px-2 py-1 text-sm font-medium text-brand transition hover:bg-subtle"
+            >
+              Clear filters
+            </button>
+          )}
         </div>
-        <div className="grid gap-2 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.3fr)]">
           <Select label="Status" hideLabel value={status} onChange={(event) => onFilter({ status: event.target.value || null })}>
             <option value="">All statuses</option>
             {STATUSES.map((item) => <option key={item} value={item}>{labelStatus(item)}</option>)}
@@ -365,9 +388,29 @@ function Ledger({
             <option value="">All types</option>
             {TYPES.map((item) => <option key={item} value={item}>{TYPE_LABELS[item]}</option>)}
           </Select>
-          <Button variant="secondary" onClick={() => setDriverPickerOpen(true)}>{driver ? driverLabel(driver) : "Choose driver"}</Button>
-          {status === "EXPIRED" && <Alert tone="info">Expired allocations may still change after gateway reconciliation.</Alert>}
+          <div className="col-span-2 flex min-w-0 md:col-span-1">
+            <button
+              type="button"
+              onClick={() => setDriverPickerOpen(true)}
+              className={`flex h-10 min-w-0 flex-1 items-center gap-2 border border-border bg-surface px-3 text-left text-sm transition hover:bg-subtle pointer-coarse:h-11 ${driverId ? "rounded-l-lg border-r-0" : "rounded-lg"}`}
+            >
+              <Icon name="user" className="size-4 shrink-0 text-muted" />
+              <span className={`min-w-0 flex-1 truncate ${driverId ? "font-medium" : "text-muted"}`}>{driverId ? driverName(driverId) : "All drivers"}</span>
+              <Icon name="search" className="size-4 shrink-0 text-muted" />
+            </button>
+            {driverId && (
+              <button
+                type="button"
+                onClick={() => onFilter({ userId: null })}
+                aria-label="Clear driver filter"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-r-lg border border-border text-muted transition hover:bg-subtle hover:text-foreground pointer-coarse:h-11 pointer-coarse:w-11"
+              >
+                <Icon name="x" className="size-4" />
+              </button>
+            )}
+          </div>
         </div>
+        {status === "EXPIRED" && <Alert tone="info">Expired allocations may still change after gateway reconciliation.</Alert>}
       </div>
 
       {loading ? (
@@ -377,36 +420,68 @@ function Ledger({
       ) : !data || data.items.length === 0 ? (
         <EmptyState icon="bolt" title="No allocations found">Adjust the filters or date range to inspect a different slice.</EmptyState>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
-            <thead className="border-b border-border bg-subtle/60 text-xs uppercase tracking-wider text-muted">
-              <tr>
-                <th className="px-4 py-3 font-medium">Driver</th>
-                <th className="px-4 py-3 font-medium">Type</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 text-right font-medium">Amount</th>
-                <th className="px-4 py-3 font-medium">Created</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {data.items.map((allocation) => {
-                const found = driverMap.get(allocation.user_id);
-                return (
+        <>
+          {/* Phones: one tappable card per allocation, so nothing scrolls sideways. */}
+          <ul className="divide-y divide-border md:hidden">
+            {data.items.map((allocation) => (
+              <li key={allocation.id}>
+                <button
+                  type="button"
+                  onClick={() => onOpen(allocation.id)}
+                  className="flex w-full items-start gap-3 px-4 py-3.5 text-left transition hover:bg-subtle/60 active:bg-subtle focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand"
+                >
+                  <span
+                    aria-hidden
+                    className={`mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full ${allocation.type === "FREE_GRANT" ? "bg-brand-soft text-brand" : "bg-subtle text-muted"}`}
+                  >
+                    <Icon name={allocation.type === "FREE_GRANT" ? "tag" : "wallet"} className="size-4" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-baseline justify-between gap-3">
+                      <span className="min-w-0 truncate text-sm font-semibold">{driverName(allocation.user_id)}</span>
+                      <span className="shrink-0 text-sm font-semibold tabular-nums">{naira(allocation.amount)}</span>
+                    </span>
+                    <span className="mt-0.5 flex items-baseline justify-between gap-3 text-xs text-muted">
+                      <span className="min-w-0 truncate">{TYPE_LABELS[allocation.type]} · {formatDateTime(allocation.created_at)}</span>
+                      <span className="shrink-0 tabular-nums">{allocation.kwh_equivalent.toLocaleString()} kWh</span>
+                    </span>
+                    <span className="mt-2 flex">
+                      <Badge dot tone={statusTone(allocation.status)}>{labelStatus(allocation.status)}</Badge>
+                    </span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+
+          <div className="hidden overflow-x-auto md:block">
+            <table className="min-w-full text-left text-sm">
+              <thead className="border-b border-border bg-subtle/60 text-xs uppercase tracking-wider text-muted">
+                <tr>
+                  <th className="px-4 py-3 font-medium">Driver</th>
+                  <th className="px-4 py-3 font-medium">Type</th>
+                  <th className="px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3 text-right font-medium">Amount</th>
+                  <th className="px-4 py-3 font-medium">Created</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {data.items.map((allocation) => (
                   <tr key={allocation.id} onClick={() => onOpen(allocation.id)} className="cursor-pointer transition hover:bg-subtle/70">
-                    <td className="px-4 py-3">
-                      <p className="font-medium"><DriverLink id={allocation.user_id}>{found ? driverLabel(found) : `Driver ${shortId(allocation.user_id)}`}</DriverLink></p>
-                      <p className="mt-0.5 text-xs text-muted">{shortId(allocation.id)}</p>
+                    <td className="max-w-56 px-4 py-3">
+                      <p className="truncate font-medium"><DriverLink id={allocation.user_id}>{driverName(allocation.user_id)}</DriverLink></p>
+                      <p className="mt-0.5 font-mono text-xs text-muted">{shortId(allocation.id)}</p>
                     </td>
-                    <td className="px-4 py-3">{TYPE_LABELS[allocation.type]}</td>
+                    <td className="whitespace-nowrap px-4 py-3">{TYPE_LABELS[allocation.type]}</td>
                     <td className="px-4 py-3"><Badge tone={statusTone(allocation.status)}>{labelStatus(allocation.status)}</Badge></td>
-                    <td className="px-4 py-3 text-right">{amountCell(allocation.amount)}</td>
-                    <td className="px-4 py-3 text-muted">{formatDateTime(allocation.created_at)}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-right">{amountCell(allocation.amount)}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-muted">{formatDateTime(allocation.created_at)}</td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
       <Pagination pagination={data?.pagination} noun="allocations" onPage={onPage} />
       <DriverPickerModal
