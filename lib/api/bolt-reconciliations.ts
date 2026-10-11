@@ -165,21 +165,32 @@ export function requestReportUpload(fileName: string) {
 }
 
 /**
- * Step 2: PUT the raw file straight to S3. XHR rather than fetch so we can
- * report upload progress. The signed headers must be sent exactly; the
- * browser's own `file.type` for CSV is often wrong and would break the signature.
+ * Step 2: send the raw file to /api/report-upload, which PUTs it to the
+ * presigned storage URL server-side (see app/api/report-upload/route.ts), so
+ * the upload doesn't depend on the bucket's CORS rules. XHR rather than fetch
+ * so we can report upload progress. The ticket's signed headers are passed on
+ * exactly; the browser's own `file.type` for CSV is often wrong and would break
+ * the signature.
  */
 export function uploadReportFile(ticket: UploadTicket, file: File, onProgress?: (fraction: number) => void, signal?: AbortSignal) {
   return new Promise<void>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open(ticket.method || "PUT", ticket.upload_url);
-    Object.entries(ticket.headers).forEach(([name, value]) => xhr.setRequestHeader(name, value));
+    xhr.open("POST", "/api/report-upload");
+    xhr.setRequestHeader("Content-Type", "application/octet-stream");
+    xhr.setRequestHeader("X-Upload-Url", ticket.upload_url);
+    xhr.setRequestHeader("X-Upload-Headers", JSON.stringify(ticket.headers));
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable) onProgress?.(event.loaded / event.total);
     };
     xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) resolve();
-      else reject(new ApiError(failure(xhr.status, "The file couldn't be uploaded to storage. Please try again.")));
+      if (xhr.status >= 200 && xhr.status < 300) return resolve();
+      let message = "The file couldn't be uploaded to storage. Please try again.";
+      try {
+        message = (JSON.parse(xhr.responseText) as { message?: string }).message || message;
+      } catch {
+        // Not our JSON envelope (e.g. a gateway error page); keep the generic message.
+      }
+      reject(new ApiError(failure(xhr.status, message)));
     };
     xhr.onerror = () => reject(new ApiError(failure(0, NETWORK_ERROR_MESSAGE)));
     xhr.onabort = () => reject(new DOMException("Upload cancelled", "AbortError"));

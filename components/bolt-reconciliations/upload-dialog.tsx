@@ -122,7 +122,7 @@ export function UploadReportDialog({ initialFile = null, onClose, onDone }: { in
   const endId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
-  // A file already in S3 that the API kept (after a 409), so "Replace" doesn't upload it again.
+  // A file already in storage that the API kept (after a 409), so "Replace" doesn't upload it again.
   const uploaded = useRef<{ object_key: string; file_name: string } | null>(null);
   const today = lagosToday();
   const [first] = useState(() => initialPeriod(initialFile, today));
@@ -140,7 +140,7 @@ export function UploadReportDialog({ initialFile = null, onClose, onDone }: { in
 
   const busy = phase.kind === "working";
 
-  // Stop an in-flight S3 upload if the dialog goes away.
+  // Stop an in-flight upload if the dialog goes away.
   useEffect(() => () => abortRef.current?.abort(), []);
 
   const choose = (picked: File | undefined) => {
