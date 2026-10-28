@@ -12,9 +12,10 @@ export interface BankAccount {
 /** MONNIFY is the default gateway; PAYSTACK is the extra Wema Bank account drivers also get. */
 export type PaymentProvider = "MONNIFY" | "PAYSTACK";
 
+/** What admins call each account - the payment company behind it never shows in the UI. */
 export const PAYMENT_PROVIDER_LABELS: Record<PaymentProvider, string> = {
-  MONNIFY: "Monnify",
-  PAYSTACK: "Paystack (Wema Bank)",
+  MONNIFY: "Main account",
+  PAYSTACK: "Extra Wema Bank account",
 };
 
 /** Every DVA a driver holds, primary first - falls back to the single `virtual_account`. */

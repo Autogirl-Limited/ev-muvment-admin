@@ -55,7 +55,7 @@ const COLUMNS: Column[] = [
   { key: "payment_reference", label: "Payment reference", width: 30, cell: (tx) => ({ kind: "text", value: tx.payment_reference }) },
   { key: "narration", label: "Narration", width: 40, defaultOn: true, cell: (tx) => ({ kind: "text", value: tx.narration }) },
   { key: "currency", label: "Currency", width: 10, cell: (tx) => ({ kind: "text", value: tx.currency }) },
-  { key: "virtual_account_id", label: "Virtual account ID", width: 38, cell: (tx) => ({ kind: "text", value: tx.virtual_account_id }) },
+  { key: "virtual_account_id", label: "Bank account ID", width: 38, cell: (tx) => ({ kind: "text", value: tx.virtual_account_id }) },
   { key: "id", label: "Transaction ID", width: 38, cell: (tx) => ({ kind: "text", value: tx.id }) },
   { key: "created_at", label: "Recorded at (Lagos)", width: 18, cell: (tx) => ({ kind: "date", value: tx.created_at }) },
 ];
@@ -301,7 +301,7 @@ export function ExportDialog({ onClose, isAdmin, generatedBy, initial }: ExportD
           const integer = (value: number): Cell => ({ kind: "number", value, format: "integer" });
           sheets.push({
             name: "Summary",
-            header: ["DVA transactions export", ""],
+            header: ["Bank transfers export", ""],
             widths: [26, 44],
             rows: [
               [text("Generated"), { kind: "date", value: new Date().toISOString() }],

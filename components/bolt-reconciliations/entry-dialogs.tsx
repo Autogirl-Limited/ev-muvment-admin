@@ -26,11 +26,11 @@ function explain(entry: ReconciliationEntry): string {
   const paid = money(entry.dva_amount);
   switch (entry.status) {
     case "SHORT":
-      return `Collected ${cash} in cash on Bolt but only ${paid} reached their DVA, so ${money(Math.abs(entry.variance ?? 0))} is missing.`;
+      return `Collected ${cash} in cash on Bolt but only ${paid} reached their bank account, so ${money(Math.abs(entry.variance ?? 0))} is missing.`;
     case "OVER":
-      return `Collected ${cash} in cash on Bolt and paid ${paid} into their DVA, ${money(entry.variance ?? 0)} more than needed.`;
+      return `Collected ${cash} in cash on Bolt and paid ${paid} into their bank account, ${money(entry.variance ?? 0)} more than needed.`;
     case "BALANCED":
-      return `Collected ${cash} in cash and paid ${paid} into their DVA. That's within ₦1, so it balances.`;
+      return `Collected ${cash} in cash and paid ${paid} into their bank account. That's within ₦1, so it balances.`;
     case "NO_CASH":
       return "No cash was collected on Bolt and nothing was paid in, so there's nothing to check.";
     case "UNMATCHED":
@@ -38,7 +38,7 @@ function explain(entry: ReconciliationEntry): string {
     case "DUPLICATE":
       return "This driver appears more than once in the report. Their cash from every row is compared on their first row.";
     case "NOT_IN_REPORT":
-      return `Received ${paid} into their DVA during this period but isn't in the Bolt report. Check whether they drove under another Bolt account.`;
+      return `Received ${paid} into their bank account during this period but isn't in the Bolt report. Check whether they drove under another Bolt account.`;
   }
 }
 
@@ -126,7 +126,7 @@ export function EntryDetail({
 
       <div className="grid grid-cols-3 gap-2">
         <Figure label="Collected on Bolt">{money(entry.collected_cash)}</Figure>
-        <Figure label="Paid into DVA" sub={`${entry.dva_transaction_count} ${entry.dva_transaction_count === 1 ? "transfer" : "transfers"}`}>
+        <Figure label="Paid into bank" sub={`${entry.dva_transaction_count} ${entry.dva_transaction_count === 1 ? "transfer" : "transfers"}`}>
           {money(entry.dva_amount)}
         </Figure>
         <Figure label="Difference">
@@ -149,7 +149,7 @@ export function EntryDetail({
           )}
         </div>
       ) : (
-        <Alert tone="info">This row isn&apos;t tied to a driver yet, so their DVA can&apos;t be checked.</Alert>
+        <Alert tone="info">This row isn&apos;t tied to a driver yet, so their bank transfers can&apos;t be checked.</Alert>
       )}
 
       <div className="grid gap-2 sm:flex sm:flex-wrap">
@@ -170,7 +170,7 @@ export function EntryDetail({
             href={dvaHref}
             className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-border px-4 text-sm font-medium transition hover:bg-subtle pointer-coarse:h-11"
           >
-            View DVA transfers
+            View bank transfers
             <Icon name="arrowRight" className="size-4" />
           </Link>
         )}

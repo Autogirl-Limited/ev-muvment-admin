@@ -328,12 +328,12 @@ export function DvaTransactionsPage() {
     mutationFn: () => resyncAllDriverDvas(resyncProvider),
     onSuccess: (result) => {
       setBulkResult(result);
-      toast.success(`Resynced ${result.succeeded}/${result.total} driver bank accounts.`);
+      toast.success(`Recreated ${result.succeeded} of ${result.total} driver bank accounts.`);
       setConfirmAll("");
       setMaintenanceOpen(false);
       setResyncMode("choose");
     },
-    onError: (error) => toast.error(error instanceof ApiError ? error.message : "Bulk resync failed or timed out. Refresh driver records before retrying."),
+    onError: (error) => toast.error(error instanceof ApiError ? error.message : "Recreating the bank accounts failed or timed out. Refresh the driver list before trying again."),
   });
 
   if (!isStaff) return <AccessDenied />;
@@ -383,7 +383,7 @@ export function DvaTransactionsPage() {
           <div className="min-w-0">
             <h1 className="text-2xl font-semibold tracking-tight">Transactions</h1>
             <p className="mt-1 max-w-2xl text-sm text-muted">
-              Successful inbound transfers into driver virtual accounts, reconciled by Nigeria-day ranges.
+              Money drivers have received into their bank accounts, grouped by Nigerian calendar day.
             </p>
           </div>
         </div>
@@ -392,7 +392,7 @@ export function DvaTransactionsPage() {
           {isAdmin && (
             <Button variant="secondary" onClick={openMaintenance} className="h-12 sm:shrink-0">
               <Icon name="refresh" className="size-4" />
-              DVA maintenance
+              Fix bank accounts
             </Button>
           )}
         </div>
@@ -548,7 +548,7 @@ export function DvaTransactionsPage() {
                 ["Payer account", dash(selected.payer_account_number)],
                 ["Payer bank", dash(payerBank(selected))],
                 ["Bank code", dash(selected.payer_bank_code)],
-                ["Virtual account", dash(selected.virtual_account_id)],
+                ["Bank account ID", dash(selected.virtual_account_id)],
                 ["Payment ref", dash(selected.payment_reference)],
                 ["Recorded", formatDateTime(selected.created_at)],
               ].map(([label, value]) => (
@@ -639,7 +639,7 @@ export function DvaTransactionsPage() {
           setResyncMode("choose");
           setConfirmAll("");
         }}
-        title="DVA maintenance"
+        title="Fix driver bank accounts"
         size="lg"
       >
         <div className="space-y-4">
@@ -647,8 +647,8 @@ export function DvaTransactionsPage() {
             <>
               <p className="text-sm text-muted">Recreating driver bank accounts changes the account numbers they should use. Transaction history remains available.</p>
               <div className="space-y-1.5 text-sm">
-                <p className="font-medium">Payment provider</p>
-                <div role="radiogroup" aria-label="Payment provider" className="inline-flex rounded-lg border border-border bg-subtle p-1">
+                <p className="font-medium">Which account</p>
+                <div role="radiogroup" aria-label="Which account" className="inline-flex rounded-lg border border-border bg-subtle p-1">
                   {(Object.keys(PAYMENT_PROVIDER_LABELS) as PaymentProvider[]).map((provider) => (
                     <button
                       key={provider}
@@ -663,17 +663,17 @@ export function DvaTransactionsPage() {
                   ))}
                 </div>
                 {resyncProvider === "PAYSTACK" && (
-                  <p className="text-muted">Only drivers&apos; Paystack accounts change; their Monnify accounts stay as they are. Resyncing all also creates the Wema Bank account for drivers who don&apos;t have one yet.</p>
+                  <p className="text-muted">Only drivers&apos; extra Wema Bank accounts change; their main accounts stay as they are. Doing this for all drivers also gives an extra Wema Bank account to every driver who doesn&apos;t have one yet.</p>
                 )}
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <button type="button" onClick={() => setResyncMode("one")} className="rounded-lg border border-border bg-surface p-4 text-left transition hover:border-brand/50 hover:bg-subtle">
-                  <p className="font-semibold">Resync one driver</p>
-                  <p className="mt-1 text-sm text-muted">Search for a driver and recreate only their virtual account.</p>
+                  <p className="font-semibold">One driver</p>
+                  <p className="mt-1 text-sm text-muted">Search for a driver and recreate just their bank account.</p>
                 </button>
                 <button type="button" onClick={() => setResyncMode("all")} className="rounded-lg border border-danger/30 bg-danger-soft p-4 text-left transition hover:brightness-95">
-                  <p className="font-semibold text-danger">Resync all drivers</p>
-                  <p className="mt-1 text-sm">Use only when provider records are broadly out of sync.</p>
+                  <p className="font-semibold text-danger">All drivers</p>
+                  <p className="mt-1 text-sm">Use only when many drivers&apos; accounts have stopped receiving transfers.</p>
                 </button>
               </div>
             </>
@@ -683,8 +683,8 @@ export function DvaTransactionsPage() {
             <>
               <button type="button" onClick={() => setResyncMode("choose")} className="text-sm font-medium text-brand hover:underline">Back</button>
               <div className="rounded-lg border border-danger/30 bg-danger-soft p-4 text-sm">
-                <p className="font-semibold text-danger">Resync every driver&apos;s {PAYMENT_PROVIDER_LABELS[resyncProvider]} account?</p>
-                <p className="mt-1">Old account numbers may stop working. Type RESYNC to confirm this bulk operation.</p>
+                <p className="font-semibold text-danger">Recreate every driver&apos;s {PAYMENT_PROVIDER_LABELS[resyncProvider].toLowerCase()}?</p>
+                <p className="mt-1">Drivers get new account numbers and their old ones may stop working. Type RECREATE to confirm.</p>
               </div>
               <label className="block space-y-1.5 text-sm">
                 <span className="font-medium">Confirmation</span>
@@ -692,12 +692,12 @@ export function DvaTransactionsPage() {
                   value={confirmAll}
                   onChange={(event) => setConfirmAll(event.target.value)}
                   className="h-10 w-full rounded-lg border border-input bg-surface px-3 outline-none focus:border-danger focus:ring-3 focus:ring-danger/20"
-                  placeholder="Type RESYNC"
+                  placeholder="Type RECREATE"
                 />
               </label>
               <ModalActions>
                 <Button variant="secondary" onClick={() => setResyncMode("choose")} disabled={bulkResync.isPending}>Back</Button>
-                <Button variant="danger" disabled={confirmAll !== "RESYNC"} loading={bulkResync.isPending} onClick={() => bulkResync.mutate()}>Resync all</Button>
+                <Button variant="danger" disabled={confirmAll !== "RECREATE"} loading={bulkResync.isPending} onClick={() => bulkResync.mutate()}>Recreate all</Button>
               </ModalActions>
             </>
           )}
@@ -727,7 +727,7 @@ export function DvaTransactionsPage() {
                           <p className="truncate text-xs text-muted">@{driver.username} · {dash(driver.email)} · {dash(driver.phone_number)}</p>
                         </div>
                         <Button variant="danger" loading={singleResync.isPending} onClick={() => singleResync.mutate(driver.id)} className="shrink-0">
-                          Resync
+                          Recreate
                         </Button>
                       </div>
                     );
@@ -754,7 +754,7 @@ export function DvaTransactionsPage() {
         {resyncedAccount && <DvaCard account={resyncedAccount} />}
       </Modal>
 
-      <Modal open={Boolean(bulkResult)} onClose={() => setBulkResult(null)} title="Bulk resync result">
+      <Modal open={Boolean(bulkResult)} onClose={() => setBulkResult(null)} title="Recreated bank accounts">
         {bulkResult && (
           <div className="space-y-4">
             <p className="text-sm text-muted">{bulkResult.succeeded} succeeded, {bulkResult.failed} failed, {bulkResult.total} total.</p>

@@ -124,7 +124,7 @@ export function BoltReconciliationsPage() {
         icon="fileCheck"
         title="Bolt reconciliation"
         showBackLink={false}
-        description="Check the cash each driver collected on Bolt against what actually landed in their DVA, one report per day."
+        description="Check the cash each driver collected on Bolt against what actually landed in their bank account, one report per day."
         actions={uploadButton}
       />
 
@@ -154,7 +154,7 @@ export function BoltReconciliationsPage() {
           ) : (
             <EmptyState icon="fileCheck" title="No Bolt reports yet" action={uploadButton || undefined}>
               {isAdmin
-                ? "Download the day's “Earnings per driver” export from Bolt Fleet and upload it here. We'll check every driver's cash against their DVA."
+                ? "Download the day's “Earnings per driver” export from Bolt Fleet and upload it here. We'll check every driver's cash against their bank transfers."
                 : "Once an admin uploads a Bolt export, each day's results show up here."}
             </EmptyState>
           )
@@ -164,7 +164,7 @@ export function BoltReconciliationsPage() {
               <span>Day</span>
               <span>Result</span>
               <span className="text-right">Cash collected</span>
-              <span className="text-right">DVA received</span>
+              <span className="text-right">Bank transfers</span>
               <span className="text-right">Shortfall</span>
               <span>Uploaded</span>
               <span />
@@ -191,7 +191,7 @@ export function BoltReconciliationsPage() {
                       <p className="font-medium tabular-nums">{money(report.summary.total_collected_cash)}</p>
                     </div>
                     <div className="lg:text-right">
-                      <p className="text-xs text-muted lg:hidden">DVA received</p>
+                      <p className="text-xs text-muted lg:hidden">Bank transfers</p>
                       <p className="font-medium tabular-nums">{money(report.summary.total_dva_received)}</p>
                     </div>
                     <div className="lg:text-right">

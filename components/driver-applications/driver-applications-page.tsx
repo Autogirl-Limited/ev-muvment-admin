@@ -121,7 +121,7 @@ function DvaCard({ account }: { account: VirtualAccount }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-sm font-semibold">{account.account_name}</p>
-          <p className="mt-1 text-xs text-muted">{PAYMENT_PROVIDER_LABELS[account.provider] ?? account.provider} · {account.currency} · {account.status}</p>
+          <p className="mt-1 text-xs text-muted">{PAYMENT_PROVIDER_LABELS[account.provider] ?? "Bank account"}{account.status !== "ACTIVE" && " · No longer active"}</p>
         </div>
       </div>
       <div className="mt-4 grid gap-2">
@@ -433,7 +433,7 @@ export function DriverApplicationsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Driver applications"
-        description="Review pending applicants, approve driver accounts with bank accounts, and recover cleanly when provider or duplicate-account issues happen."
+        description="Review pending applicants, approve driver accounts with bank accounts, and recover cleanly when bank account or duplicate-account issues happen."
       />
 
       <section className="rounded-lg border border-border bg-surface shadow-card">

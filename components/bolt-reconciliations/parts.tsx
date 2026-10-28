@@ -50,7 +50,7 @@ export const STATUS_META: Record<EntryStatus, { label: string; hint: string; pil
   },
   NOT_IN_REPORT: {
     label: "Not in report",
-    hint: "Their DVA was funded but they aren't in the Bolt report",
+    hint: "They received bank transfers but aren't in the Bolt report",
     pill: "bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-300",
     dot: "bg-violet-500",
   },
@@ -90,7 +90,7 @@ export const MATCH_LABELS: Record<MatchMethod, string> = {
   PHONE: "Matched by phone",
   MANUAL: "Linked by an admin",
   NONE: "Not matched",
-  DVA: "Found from DVA payments",
+  DVA: "Found from bank transfers",
 };
 
 export function StatusBadge({ status }: { status: EntryStatus }) {

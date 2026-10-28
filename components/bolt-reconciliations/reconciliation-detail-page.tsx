@@ -120,7 +120,7 @@ function EntryRow({ entry, isAdmin, onOpen, onLink }: { entry: ReconciliationEnt
           <div className="min-w-0">
             <p className={`truncate text-sm font-medium ${entry.driver ? "" : "italic"}`}>{entryName(entry)}</p>
             <p className="truncate text-xs text-muted">
-              {differentName ? `On Bolt: ${boltName}` : contact || (entry.row_number !== null ? `Row ${entry.row_number}` : "From DVA payments")}
+              {differentName ? `On Bolt: ${boltName}` : contact || (entry.row_number !== null ? `Row ${entry.row_number}` : "From bank transfers")}
             </p>
           </div>
           <span className="lg:hidden"><StatusBadge status={entry.status} /></span>
@@ -131,7 +131,7 @@ function EntryRow({ entry, isAdmin, onOpen, onLink }: { entry: ReconciliationEnt
           <p className="text-sm tabular-nums">{money(entry.collected_cash)}</p>
         </div>
         <div className="lg:text-right">
-          <p className="text-xs text-muted lg:hidden">Paid into DVA</p>
+          <p className="text-xs text-muted lg:hidden">Paid into bank</p>
           <p className="text-sm tabular-nums">
             {money(entry.dva_amount)}
             {entry.dva_transaction_count > 1 && <span className="ml-1 text-xs text-muted">×{entry.dva_transaction_count}</span>}
@@ -212,7 +212,7 @@ export function BoltReconciliationDetailPage({ id }: { id: string }) {
       const before = reportQuery.data?.summary;
       refreshAll(next);
       const after = next.summary;
-      if (!before) return toast.success("Report re-checked against the DVA ledger.");
+      if (!before) return toast.success("Report re-checked against bank transfers.");
       const changes: string[] = [];
       if (before.total_shortfall !== after.total_shortfall) changes.push(`shortfall ${money(before.total_shortfall)} → ${money(after.total_shortfall)}`);
       if (before.short_count !== after.short_count) changes.push(`short drivers ${before.short_count} → ${after.short_count}`);
@@ -341,7 +341,7 @@ export function BoltReconciliationDetailPage({ id }: { id: string }) {
               Download
             </Button>
             {isAdmin && (
-              <Button variant="secondary" onClick={() => rerun.mutate()} loading={rerun.isPending} title="Check again against the DVA ledger as it is now">
+              <Button variant="secondary" onClick={() => rerun.mutate()} loading={rerun.isPending} title="Check again against bank transfers as it is now">
                 {!rerun.isPending && <Icon name="refresh" className="size-4" />}
                 Re-run
               </Button>
@@ -367,7 +367,7 @@ export function BoltReconciliationDetailPage({ id }: { id: string }) {
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <Tile label="Cash collected" value={money(summary.total_collected_cash)} sub={`From ${summary.report_rows} Bolt ${summary.report_rows === 1 ? "row" : "rows"}`} />
-        <Tile label="DVA received" value={money(summary.total_dva_received)} sub={`From ${summary.matched_rows} matched ${summary.matched_rows === 1 ? "driver" : "drivers"}`} />
+        <Tile label="Bank transfers" value={money(summary.total_dva_received)} sub={`From ${summary.matched_rows} matched ${summary.matched_rows === 1 ? "driver" : "drivers"}`} />
         <Tile
           label="Shortfall"
           value={money(summary.total_shortfall)}
@@ -395,7 +395,7 @@ export function BoltReconciliationDetailPage({ id }: { id: string }) {
         >
           <span>
             <span className="font-semibold">{summary.not_in_report_count} {summary.not_in_report_count === 1 ? "driver" : "drivers"}</span> received{" "}
-            <span className="font-semibold tabular-nums">{money(summary.not_in_report_dva_amount)}</span> into their DVA but {summary.not_in_report_count === 1 ? "isn't" : "aren't"} in this Bolt report.
+            <span className="font-semibold tabular-nums">{money(summary.not_in_report_dva_amount)}</span> into their bank {summary.not_in_report_count === 1 ? "account" : "accounts"} but {summary.not_in_report_count === 1 ? "isn't" : "aren't"} in this Bolt report.
           </span>
           <Icon name="chevronRight" className="size-4 shrink-0 text-muted" />
         </button>
@@ -456,7 +456,7 @@ export function BoltReconciliationDetailPage({ id }: { id: string }) {
               <span>Driver</span>
               <span>Status</span>
               <span className="text-right">Collected</span>
-              <span className="text-right">Paid into DVA</span>
+              <span className="text-right">Paid into bank</span>
               <span className="text-right">Difference</span>
               <span>Match</span>
             </div>
@@ -473,7 +473,7 @@ export function BoltReconciliationDetailPage({ id }: { id: string }) {
       <p className="flex gap-2 px-1 text-xs text-muted">
         <Icon name="clock" className="mt-px size-3.5 shrink-0" />
         <span>
-          DVA payments count by Lagos day (00:00 to 23:59). A deposit made after midnight for the previous day&apos;s cash counts towards the next day&apos;s report, and re-running won&apos;t move it.
+          Bank transfers count by Lagos day (00:00 to 23:59). A deposit made after midnight for the previous day&apos;s cash counts towards the next day&apos;s report, and re-running won&apos;t move it.
           {isAdmin && " Re-run after late deposits land or after fixing a driver's email or phone."}
         </span>
       </p>

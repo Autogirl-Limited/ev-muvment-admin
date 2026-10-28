@@ -33,7 +33,7 @@ type Phase = { kind: "form" } | { kind: "working"; step: Step } | { kind: "confl
 const STEPS: Array<[Step, string]> = [
   ["prepare", "Preparing upload"],
   ["upload", "Uploading file"],
-  ["reconcile", "Checking every driver against their DVA"],
+  ["reconcile", "Checking every driver against their bank transfers"],
 ];
 
 const inputClass =
@@ -98,7 +98,7 @@ function Progress({ step, fraction }: { step: Step; fraction: number }) {
                   <div className="h-full rounded-full bg-brand transition-[width] duration-200" style={{ width: `${Math.max(3, fraction * 100)}%` }} />
                 </div>
               )}
-              {active && id === "reconcile" && <p className="mt-0.5 text-xs text-muted">Matching rows to drivers and totting up their DVA payments. This takes a few seconds.</p>}
+              {active && id === "reconcile" && <p className="mt-0.5 text-xs text-muted">Matching rows to drivers and totting up their bank transfers. This takes a few seconds.</p>}
             </div>
           </li>
         );
@@ -266,7 +266,7 @@ export function UploadReportDialog({ initialFile = null, onClose, onDone }: { in
             <div className="space-y-1 text-sm">
               <p className="font-semibold">There&apos;s already a report for {periodLabel(range)}</p>
               <p className="text-muted">
-                Replacing it deletes the old report, any drivers linked to it by hand, and its stored file. The new file is checked against the DVA ledger as it is now.
+                Replacing it deletes the old report, any drivers linked to it by hand, and its stored file. The new file is checked against bank transfers as it is now.
               </p>
             </div>
           </div>

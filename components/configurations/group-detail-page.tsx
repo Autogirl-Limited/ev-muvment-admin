@@ -328,7 +328,7 @@ export function GroupDetailPage({ id }: { id: string }) {
       {special && (
         <div className="mb-5">
           <Alert tone="info">
-            <strong className="font-semibold">Receives live payment alerts.</strong> Everyone in this group gets a live notice, an email and an in-app alert whenever a driver&apos;s virtual account is funded, plus wallet top-up updates. New staff aren&apos;t added automatically.
+            <strong className="font-semibold">Receives live payment alerts.</strong> Everyone in this group gets a live notice, an email and an in-app alert whenever a driver receives a bank transfer, plus wallet top-up updates. New staff aren&apos;t added automatically.
           </Alert>
         </div>
       )}
@@ -427,7 +427,7 @@ export function GroupDetailPage({ id }: { id: string }) {
         </p>
         {special && (
           <div className="space-y-2 rounded-xl border border-danger/30 bg-danger-soft p-3.5 text-danger">
-            <p className="font-medium">Live payment alerts, alert emails and &ldquo;Driver DVA funded&rdquo; notifications stop immediately for everyone on this team.</p>
+            <p className="font-medium">Live payment alerts, alert emails and &ldquo;Driver payment received&rdquo; notifications stop immediately for everyone on this team.</p>
             <p className="text-sm">Recreating a group with the exact same name and re-adding the members turns them back on.</p>
             <label className="block pt-1 text-sm text-foreground">
               Type <strong className="font-mono">{group.name}</strong> to confirm

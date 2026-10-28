@@ -326,7 +326,7 @@ export function DriverDetailPage({ id }: { id: string }) {
                   <div key={item.id} className="space-y-2">
                     <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                       <p className="text-sm text-muted">{item.account_name}</p>
-                      <p className="text-xs font-medium uppercase tracking-wide text-muted">{PAYMENT_PROVIDER_LABELS[item.provider] ?? item.provider}</p>
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted">{PAYMENT_PROVIDER_LABELS[item.provider] ?? "Bank account"}</p>
                     </div>
                     <div className="grid gap-2">
                       {(item.banks.length ? item.banks : [{ bank_name: item.bank_name, bank_code: item.bank_code, account_number: item.account_number }]).map((bank) => (
@@ -339,19 +339,19 @@ export function DriverDetailPage({ id }: { id: string }) {
                         </div>
                       ))}
                     </div>
-                    {item.status !== "ACTIVE" && <Alert tone="error">This bank account is inactive at the provider.</Alert>}
+                    {item.status !== "ACTIVE" && <Alert tone="error">This bank account is no longer active. Transfers into it won&apos;t reach the driver.</Alert>}
                   </div>
                 ))}
                 {!hasPaystack && (
                   <Button variant="secondary" onClick={() => recreateBank.mutate("PAYSTACK")} loading={recreateBank.isPending}>
-                    <Icon name="refresh" className="size-4" />Add Paystack (Wema Bank) account
+                    <Icon name="refresh" className="size-4" />Add extra Wema Bank account
                   </Button>
                 )}
               </div>
             ) : (
               <div className="p-2">
                 <EmptyState icon="bank" title="No bank account" action={<Button onClick={() => recreateBank.mutate()} loading={recreateBank.isPending}><Icon name="refresh" className="size-4" />Create bank account</Button>}>
-                  This driver can&apos;t receive bank transfers yet. Creating one asks the payment provider for a new account.
+                  This driver can&apos;t receive bank transfers yet. Create one to give them an account number to share.
                 </EmptyState>
               </div>
             )}

@@ -269,8 +269,8 @@ function DeleteUserBody({ user, onClose, onDeleted }: { user: ManagedUser; onClo
         <ul className="list-disc space-y-1 pl-5">
           {isDriver && (
             <>
-              <li><span className="font-medium text-foreground">{count(allocations.data?.pagination.total_items)}</span> wallet allocations and <span className="font-medium text-foreground">{count(transactions.data?.pagination.total_items)}</span> DVA transactions (platform totals shrink)</li>
-              <li>Their bank account record. The account at the payment provider is <span className="font-medium text-foreground">not</span> closed.</li>
+              <li><span className="font-medium text-foreground">{count(allocations.data?.pagination.total_items)}</span> wallet allocations and <span className="font-medium text-foreground">{count(transactions.data?.pagination.total_items)}</span> bank transfers (platform totals shrink)</li>
+              <li>Their bank account details here. The account itself is <span className="font-medium text-foreground">not</span> closed at the bank.</li>
               {user.vehicle && <li>{user.vehicle.name} is freed and becomes unassigned.</li>}
             </>
           )}
