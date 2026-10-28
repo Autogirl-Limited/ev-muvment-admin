@@ -38,6 +38,7 @@ import { CACHE } from "@/lib/query/cache";
 import { queryKeys } from "@/lib/query/keys";
 import { useCurrentUser } from "@/lib/query/user";
 import { useManagedUser } from "@/lib/query/users";
+import { usePaystackAccountsEnabled } from "@/lib/query/payments";
 import { useFleetBalance } from "@/lib/query/lotgrids";
 
 const RECENT = 5;
@@ -172,6 +173,7 @@ export function DriverDetailPage({ id }: { id: string }) {
     ...CACHE.live,
   });
 
+  const paystackEnabled = usePaystackAccountsEnabled();
   const recreateBank = useMutation({
     mutationFn: (provider?: PaymentProvider) => resyncDriverDva(id, provider),
     onSuccess: (account) => {
@@ -342,7 +344,7 @@ export function DriverDetailPage({ id }: { id: string }) {
                     {item.status !== "ACTIVE" && <Alert tone="error">This bank account is no longer active. Transfers into it won&apos;t reach the driver.</Alert>}
                   </div>
                 ))}
-                {!hasPaystack && (
+                {paystackEnabled && !hasPaystack && (
                   <Button variant="secondary" onClick={() => recreateBank.mutate("PAYSTACK")} loading={recreateBank.isPending}>
                     <Icon name="refresh" className="size-4" />Add extra Wema Bank account
                   </Button>

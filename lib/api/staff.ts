@@ -209,6 +209,11 @@ export function listDriversPage(page: number, signal?: AbortSignal) {
   );
 }
 
+/** Which gateways drivers currently get a bank account with. PAYSTACK only while the API has it switched on. */
+export function listDvaProviders(signal?: AbortSignal) {
+  return apiFetch<{ providers: PaymentProvider[] }>("/payments/dva-providers", { signal });
+}
+
 /** Recreates one gateway's DVA for a driver (the default gateway's when `provider` is omitted). */
 export function resyncDriverDva(userId: string, provider?: PaymentProvider) {
   return apiFetch<VirtualAccount>(`/payments/virtual-accounts/${userId}/resync${toQuery({ provider })}`, { method: "POST" });

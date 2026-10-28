@@ -29,6 +29,7 @@ import {
 import { queryKeys } from "@/lib/query/keys";
 import { useCurrentUser } from "@/lib/query/user";
 import { useRoster } from "@/lib/query/users";
+import { usePaystackAccountsEnabled } from "@/lib/query/payments";
 
 const PAGE_SIZE = 20;
 const LAGOS = "Africa/Lagos";
@@ -249,6 +250,9 @@ export function DvaTransactionsPage() {
   const [maintenanceOpen, setMaintenanceOpen] = useState(false);
   const [resyncMode, setResyncMode] = useState<"choose" | "all" | "one">("choose");
   const [resyncProvider, setResyncProvider] = useState<PaymentProvider>("MONNIFY");
+  // While the extra Wema Bank account is switched off, only main accounts can be fixed.
+  const paystackEnabled = usePaystackAccountsEnabled();
+  const selectedProvider: PaymentProvider = paystackEnabled ? resyncProvider : "MONNIFY";
   const [exportOpen, setExportOpen] = useState(false);
 
   const isStaff = user.user_type === "ADMIN" || user.user_type === "ACCOUNT_OFFICER" || user.user_type === "RELATIONSHIP_OFFICER";
@@ -312,7 +316,7 @@ export function DvaTransactionsPage() {
   });
 
   const singleResync = useMutation({
-    mutationFn: (id: string) => resyncDriverDva(id, resyncProvider),
+    mutationFn: (id: string) => resyncDriverDva(id, selectedProvider),
     onSuccess: (account) => {
       setResyncedAccount(account);
       toast.success("Driver bank account recreated. Tell the driver to use the new account numbers.");
@@ -325,7 +329,7 @@ export function DvaTransactionsPage() {
   });
 
   const bulkResync = useMutation({
-    mutationFn: () => resyncAllDriverDvas(resyncProvider),
+    mutationFn: () => resyncAllDriverDvas(selectedProvider),
     onSuccess: (result) => {
       setBulkResult(result);
       toast.success(`Recreated ${result.succeeded} of ${result.total} driver bank accounts.`);
@@ -646,6 +650,7 @@ export function DvaTransactionsPage() {
           {resyncMode === "choose" && (
             <>
               <p className="text-sm text-muted">Recreating driver bank accounts changes the account numbers they should use. Transaction history remains available.</p>
+              {paystackEnabled && (
               <div className="space-y-1.5 text-sm">
                 <p className="font-medium">Which account</p>
                 <div role="radiogroup" aria-label="Which account" className="inline-flex rounded-lg border border-border bg-subtle p-1">
@@ -666,6 +671,7 @@ export function DvaTransactionsPage() {
                   <p className="text-muted">Only drivers&apos; extra Wema Bank accounts change; their main accounts stay as they are. Doing this for all drivers also gives an extra Wema Bank account to every driver who doesn&apos;t have one yet.</p>
                 )}
               </div>
+              )}
               <div className="grid gap-3 sm:grid-cols-2">
                 <button type="button" onClick={() => setResyncMode("one")} className="rounded-lg border border-border bg-surface p-4 text-left transition hover:border-brand/50 hover:bg-subtle">
                   <p className="font-semibold">One driver</p>
@@ -683,7 +689,7 @@ export function DvaTransactionsPage() {
             <>
               <button type="button" onClick={() => setResyncMode("choose")} className="text-sm font-medium text-brand hover:underline">Back</button>
               <div className="rounded-lg border border-danger/30 bg-danger-soft p-4 text-sm">
-                <p className="font-semibold text-danger">Recreate every driver&apos;s {PAYMENT_PROVIDER_LABELS[resyncProvider].toLowerCase()}?</p>
+                <p className="font-semibold text-danger">Recreate every driver&apos;s {PAYMENT_PROVIDER_LABELS[selectedProvider].toLowerCase()}?</p>
                 <p className="mt-1">Drivers get new account numbers and their old ones may stop working. Type RECREATE to confirm.</p>
               </div>
               <label className="block space-y-1.5 text-sm">

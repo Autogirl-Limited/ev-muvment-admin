@@ -17,6 +17,8 @@ export const queryKeys = {
   myTwoFactorMethods: ["me", "two-factor-methods"] as const,
   /** Devices the signed-in user can sign in to this site with by fingerprint / face (`GET /auth/passkeys`). */
   myPasskeys: ["me", "passkeys"] as const,
+  /** Which gateways drivers get a bank account with (`GET /payments/dva-providers`). */
+  dvaProviders: ["payments", "dva-providers"] as const,
   /** Admin: which 2FA methods the platform offers (`GET /auth-settings/two-factor-methods`). */
   authMethodSettings: ["auth-settings", "two-factor-methods"] as const,
   dashboard: {
