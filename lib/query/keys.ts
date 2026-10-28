@@ -15,6 +15,8 @@ export const queryKeys = {
   me: ["me"] as const,
   /** The signed-in user's 2FA options (`GET /auth/2fa/methods`). Under `me`, so refreshing the user refreshes it too. */
   myTwoFactorMethods: ["me", "two-factor-methods"] as const,
+  /** Devices the signed-in user can sign in to this site with by fingerprint / face (`GET /auth/passkeys`). */
+  myPasskeys: ["me", "passkeys"] as const,
   /** Admin: which 2FA methods the platform offers (`GET /auth-settings/two-factor-methods`). */
   authMethodSettings: ["auth-settings", "two-factor-methods"] as const,
   dashboard: {

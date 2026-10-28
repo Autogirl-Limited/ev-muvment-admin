@@ -10,7 +10,7 @@ import { queryKeys } from "./keys";
  * `/auth/*` is unreachable through the browser proxy, so these go through
  * Server Actions; a failed action is rethrown so React Query sees an error.
  */
-async function unwrap<T>(promise: Promise<{ ok: true; data: T } | { ok: false; message: string }>): Promise<T> {
+export async function unwrap<T>(promise: Promise<{ ok: true; data: T } | { ok: false; message: string }>): Promise<T> {
   const result = await promise;
   if (!result.ok) throw new Error(result.message || "Something went wrong. Please try again.");
   return result.data;

@@ -3,6 +3,8 @@
 import { apiRequest, type ApiFailure } from "@/lib/api/client";
 import type {
   LoginResponse,
+  Passkey,
+  PasskeyOptions,
   TotpSetupResponse,
   TwoFactorMethod,
   TwoFactorMethods,
@@ -236,4 +238,43 @@ export async function continueWithoutTwoFactor(): Promise<ActionResult> {
   }
   await updateAuthToken((token) => ({ ...token, twoFactorWaived: true }));
   return succeed("", null);
+}
+
+// ---------------------------------------------------------------------------
+// Fingerprint / face sign-in (passkeys)
+// ---------------------------------------------------------------------------
+
+/** Signed out: step 1 of a passkey sign-in. Step 2 goes through NextAuth (mode "passkey"). */
+export async function passkeyLoginOptions(input: { origin: string }): Promise<ActionResult<PasskeyOptions>> {
+  const result = await apiRequest<PasskeyOptions>("/auth/login/passkey/options", { body: { origin: input.origin } });
+  return result.ok ? succeed(result.message, result.data) : fromApi(result);
+}
+
+/** This admin site's passkeys only - the driver app keeps its own. */
+export async function listPasskeys(input: { origin: string }): Promise<ActionResult<Passkey[]>> {
+  const query = new URLSearchParams({ origin: input.origin });
+  const result = await authedRequest<Passkey[]>(`/auth/passkeys?${query}`, { method: "GET" });
+  return result.ok ? succeed(result.message, result.data) : fromApi(result);
+}
+
+export async function passkeyRegistrationOptions(input: { origin: string }): Promise<ActionResult<PasskeyOptions>> {
+  const result = await authedRequest<PasskeyOptions>("/auth/passkeys/register/options", { body: { origin: input.origin } });
+  return result.ok ? succeed(result.message, result.data) : fromApi(result);
+}
+
+export async function registerPasskey(input: {
+  challengeId: string;
+  credential: Record<string, unknown>;
+  name: string;
+}): Promise<ActionResult<Passkey>> {
+  const result = await authedRequest<Passkey>("/auth/passkeys/register", {
+    body: { challenge_id: input.challengeId, credential: input.credential, name: input.name },
+  });
+  return result.ok ? succeed(result.message, result.data) : fromApi(result);
+}
+
+export async function removePasskey(input: { id: string }): Promise<ActionResult> {
+  if (!/^[0-9a-fA-F-]{36}$/.test(input.id)) return fail("Passkey not found");
+  const result = await authedRequest(`/auth/passkeys/${input.id}`, { method: "DELETE" });
+  return result.ok ? succeed(result.message, null) : fromApi(result);
 }

@@ -85,6 +85,21 @@ async function twoFactorSignIn(credentials: Record<string, string> | undefined) 
   return userFromLogin(result.data);
 }
 
+/** Fingerprint / face: the device already proved who it is, so no password or code follows. */
+async function passkeySignIn(credentials: Record<string, string> | undefined) {
+  let answer: { challenge_id?: unknown; credential?: unknown };
+  try {
+    answer = JSON.parse(credentials?.passkey ?? "");
+  } catch {
+    throw new Error("Something went wrong. Please try again.");
+  }
+  const result = await apiRequest<LoginResponse>("/auth/login/passkey", {
+    body: { challenge_id: answer.challenge_id, credential: answer.credential },
+  });
+  if (!result.ok) throw new Error(result.message);
+  return userFromLogin(result.data);
+}
+
 export const authOptions: NextAuthOptions = {
   secret: authSecret(),
   session: {
@@ -116,8 +131,10 @@ export const authOptions: NextAuthOptions = {
         method: { type: "text" },
         challengeToken: { type: "text" },
         code: { type: "text" },
+        passkey: { type: "text" },
       },
       async authorize(credentials) {
+        if (credentials?.mode === "passkey") return passkeySignIn(credentials);
         return credentials?.mode === "twoFactor"
           ? twoFactorSignIn(credentials)
           : passwordSignIn(credentials);

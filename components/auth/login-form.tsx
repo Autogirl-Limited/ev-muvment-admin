@@ -5,13 +5,14 @@ import { useRouter } from "next/navigation";
 import { getSession, signIn } from "next-auth/react";
 import { useEffect, useState, useTransition } from "react";
 
+import { Icon } from "@/components/dashboard/screen-kit";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { CodeField } from "@/components/ui/code-field";
 import { Field } from "@/components/ui/field";
 import { PasswordField } from "@/components/ui/password-field";
 import type { TwoFactorMethod } from "@/lib/api/types";
-import { switchLoginTwoFactorMethod } from "@/lib/auth/actions";
+import { passkeyLoginOptions, switchLoginTwoFactorMethod } from "@/lib/auth/actions";
 import {
   CHANGE_PASSWORD_REQUIRED_PATH,
   DASHBOARD_PATH,
@@ -19,6 +20,7 @@ import {
 } from "@/lib/auth/constants";
 import { hasTwoFactor } from "@/lib/auth/two-factor";
 import { advanceToEmptyField } from "@/lib/form-nav";
+import { biometricLabel, getPasskey, passkeyErrorMessage, passkeysSupported } from "@/lib/passkey";
 
 const RESEND_COOLDOWN_SECONDS = 30;
 
@@ -52,6 +54,13 @@ export function LoginForm({ next, notice }: { next?: string; notice?: string }) 
   const [info, setInfo] = useState<string | null>(null);
   const [cooldown, setCooldown] = useState(0);
   const [pending, startTransition] = useTransition();
+  const [passkeyPending, startPasskey] = useTransition();
+  // Device-specific, so only known after mount: null until then (and when unsupported).
+  const [sensor, setSensor] = useState<string | null>(null);
+
+  useEffect(() => {
+    void passkeysSupported().then((ok) => setSensor(ok ? biometricLabel() : null));
+  }, []);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -114,6 +123,34 @@ export function LoginForm({ next, notice }: { next?: string; notice?: string }) 
         return;
       }
       if (await loadChallengeFromSession()) setCooldown(RESEND_COOLDOWN_SECONDS);
+    });
+  }
+
+  /** Fingerprint / face: no password or code - the device proves who it is. */
+  function signInWithPasskey() {
+    setError(null);
+    setFieldErrors({});
+    startPasskey(async () => {
+      try {
+        const options = await passkeyLoginOptions({ origin: window.location.origin });
+        if (!options.ok) {
+          setError(options.message);
+          return;
+        }
+        const credential = await getPasskey(options.data.options);
+        const result = await signIn("credentials", {
+          redirect: false,
+          mode: "passkey",
+          passkey: JSON.stringify({ challenge_id: options.data.challenge_id, credential }),
+        });
+        if (result?.error) {
+          setError(result.error);
+          return;
+        }
+        router.replace(landingPath(await getSession()));
+      } catch (err) {
+        setError(passkeyErrorMessage(err));
+      }
     });
   }
 
@@ -260,7 +297,7 @@ export function LoginForm({ next, notice }: { next?: string; notice?: string }) 
         value={identifier}
         onChange={(event) => setIdentifier(event.target.value)}
         error={fieldErrors.identifier}
-        disabled={pending}
+        disabled={pending || passkeyPending}
       />
       <PasswordField
         label="Password"
@@ -270,7 +307,7 @@ export function LoginForm({ next, notice }: { next?: string; notice?: string }) 
         value={password}
         onChange={(event) => setPassword(event.target.value)}
         error={fieldErrors.password}
-        disabled={pending}
+        disabled={pending || passkeyPending}
       />
 
       <div className="flex justify-end">
@@ -279,9 +316,23 @@ export function LoginForm({ next, notice }: { next?: string; notice?: string }) 
         </Link>
       </div>
 
-      <Button type="submit" fullWidth loading={pending}>
+      <Button type="submit" fullWidth loading={pending} disabled={passkeyPending}>
         Sign in
       </Button>
+
+      {sensor && (
+        <>
+          <div className="flex items-center gap-3 text-xs text-muted" aria-hidden>
+            <span className="h-px flex-1 bg-border" />
+            or
+            <span className="h-px flex-1 bg-border" />
+          </div>
+          <Button type="button" variant="secondary" fullWidth loading={passkeyPending} disabled={pending} onClick={signInWithPasskey}>
+            <Icon name="fingerprint" className="size-5" />
+            Sign in with {sensor}
+          </Button>
+        </>
+      )}
     </form>
   );
 }

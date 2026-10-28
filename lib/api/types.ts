@@ -75,3 +75,17 @@ export interface TwoFactorMethods {
   preferred_method: TwoFactorMethod | null;
   methods: TwoFactorMethodOption[];
 }
+
+/** WebAuthn options from the API for the browser, plus the id to send back with the answer. */
+export interface PasskeyOptions {
+  challenge_id: string;
+  options: Record<string, unknown>;
+}
+
+/** One device set up for fingerprint / face sign-in. */
+export interface Passkey {
+  id: string;
+  name: string;
+  created_at: string;
+  last_used_at: string | null;
+}
