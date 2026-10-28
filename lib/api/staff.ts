@@ -9,11 +9,25 @@ export interface BankAccount {
   account_number: string;
 }
 
+/** MONNIFY is the default gateway; PAYSTACK is the extra Wema Bank account drivers also get. */
+export type PaymentProvider = "MONNIFY" | "PAYSTACK";
+
+export const PAYMENT_PROVIDER_LABELS: Record<PaymentProvider, string> = {
+  MONNIFY: "Monnify",
+  PAYSTACK: "Paystack (Wema Bank)",
+};
+
+/** Every DVA a driver holds, primary first - falls back to the single `virtual_account`. */
+export function driverAccounts(record: { virtual_account: VirtualAccount | null; virtual_accounts?: VirtualAccount[] }) {
+  if (record.virtual_accounts?.length) return record.virtual_accounts;
+  return record.virtual_account ? [record.virtual_account] : [];
+}
+
 export interface VirtualAccount {
   id: string;
   created_at: string;
   updated_at: string;
-  provider: "MONNIFY";
+  provider: PaymentProvider;
   account_name: string;
   account_number: string;
   bank_name: string;
@@ -38,6 +52,8 @@ export interface DriverApplication {
   rejection_reason: string | null;
   user_id: string | null;
   virtual_account: VirtualAccount | null;
+  /** One per gateway, primary (`virtual_account`) first. */
+  virtual_accounts?: VirtualAccount[];
   ev_wallet_balance: number | null;
 }
 
@@ -47,7 +63,7 @@ export interface DvaTransaction {
   updated_at: string;
   user_id: string;
   virtual_account_id: string | null;
-  provider: "MONNIFY";
+  provider: PaymentProvider;
   transaction_reference: string;
   payment_reference: string | null;
   amount: number;
@@ -192,10 +208,12 @@ export function listDriversPage(page: number, signal?: AbortSignal) {
   );
 }
 
-export function resyncDriverDva(userId: string) {
-  return apiFetch<VirtualAccount>(`/payments/virtual-accounts/${userId}/resync`, { method: "POST" });
+/** Recreates one gateway's DVA for a driver (the default gateway's when `provider` is omitted). */
+export function resyncDriverDva(userId: string, provider?: PaymentProvider) {
+  return apiFetch<VirtualAccount>(`/payments/virtual-accounts/${userId}/resync${toQuery({ provider })}`, { method: "POST" });
 }
 
-export function resyncAllDriverDvas() {
-  return apiFetch<BulkResyncResponse>("/payments/virtual-accounts/resync-all", { method: "POST" });
+/** With PAYSTACK this also backfills Wema Bank DVAs for drivers who don't have one yet. */
+export function resyncAllDriverDvas(provider?: PaymentProvider) {
+  return apiFetch<BulkResyncResponse>(`/payments/virtual-accounts/resync-all${toQuery({ provider })}`, { method: "POST" });
 }

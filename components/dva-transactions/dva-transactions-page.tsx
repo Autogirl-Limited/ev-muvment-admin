@@ -23,6 +23,8 @@ import {
   type DvaTransaction,
   type VirtualAccount,
   type BulkResyncResponse,
+  type PaymentProvider,
+  PAYMENT_PROVIDER_LABELS,
 } from "@/lib/api/staff";
 import { queryKeys } from "@/lib/query/keys";
 import { useCurrentUser } from "@/lib/query/user";
@@ -246,6 +248,7 @@ export function DvaTransactionsPage() {
   const [driverFinderOpen, setDriverFinderOpen] = useState(false);
   const [maintenanceOpen, setMaintenanceOpen] = useState(false);
   const [resyncMode, setResyncMode] = useState<"choose" | "all" | "one">("choose");
+  const [resyncProvider, setResyncProvider] = useState<PaymentProvider>("MONNIFY");
   const [exportOpen, setExportOpen] = useState(false);
 
   const isStaff = user.user_type === "ADMIN" || user.user_type === "ACCOUNT_OFFICER" || user.user_type === "RELATIONSHIP_OFFICER";
@@ -309,7 +312,7 @@ export function DvaTransactionsPage() {
   });
 
   const singleResync = useMutation({
-    mutationFn: (id: string) => resyncDriverDva(id),
+    mutationFn: (id: string) => resyncDriverDva(id, resyncProvider),
     onSuccess: (account) => {
       setResyncedAccount(account);
       toast.success("Driver bank account recreated. Tell the driver to use the new account numbers.");
@@ -322,7 +325,7 @@ export function DvaTransactionsPage() {
   });
 
   const bulkResync = useMutation({
-    mutationFn: () => resyncAllDriverDvas(),
+    mutationFn: () => resyncAllDriverDvas(resyncProvider),
     onSuccess: (result) => {
       setBulkResult(result);
       toast.success(`Resynced ${result.succeeded}/${result.total} driver bank accounts.`);
@@ -643,6 +646,26 @@ export function DvaTransactionsPage() {
           {resyncMode === "choose" && (
             <>
               <p className="text-sm text-muted">Recreating driver bank accounts changes the account numbers they should use. Transaction history remains available.</p>
+              <div className="space-y-1.5 text-sm">
+                <p className="font-medium">Payment provider</p>
+                <div role="radiogroup" aria-label="Payment provider" className="inline-flex rounded-lg border border-border bg-subtle p-1">
+                  {(Object.keys(PAYMENT_PROVIDER_LABELS) as PaymentProvider[]).map((provider) => (
+                    <button
+                      key={provider}
+                      type="button"
+                      role="radio"
+                      aria-checked={resyncProvider === provider}
+                      onClick={() => setResyncProvider(provider)}
+                      className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${resyncProvider === provider ? "bg-surface shadow-card" : "text-muted hover:text-foreground"}`}
+                    >
+                      {PAYMENT_PROVIDER_LABELS[provider]}
+                    </button>
+                  ))}
+                </div>
+                {resyncProvider === "PAYSTACK" && (
+                  <p className="text-muted">Only drivers&apos; Paystack accounts change; their Monnify accounts stay as they are. Resyncing all also creates the Wema Bank account for drivers who don&apos;t have one yet.</p>
+                )}
+              </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <button type="button" onClick={() => setResyncMode("one")} className="rounded-lg border border-border bg-surface p-4 text-left transition hover:border-brand/50 hover:bg-subtle">
                   <p className="font-semibold">Resync one driver</p>
@@ -660,7 +683,7 @@ export function DvaTransactionsPage() {
             <>
               <button type="button" onClick={() => setResyncMode("choose")} className="text-sm font-medium text-brand hover:underline">Back</button>
               <div className="rounded-lg border border-danger/30 bg-danger-soft p-4 text-sm">
-                <p className="font-semibold text-danger">Resync every driver virtual account?</p>
+                <p className="font-semibold text-danger">Resync every driver&apos;s {PAYMENT_PROVIDER_LABELS[resyncProvider]} account?</p>
                 <p className="mt-1">Old account numbers may stop working. Type RESYNC to confirm this bulk operation.</p>
               </div>
               <label className="block space-y-1.5 text-sm">

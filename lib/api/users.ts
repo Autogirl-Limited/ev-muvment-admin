@@ -47,6 +47,8 @@ export interface ManagedUser {
   totp_enabled: boolean;
   ev_wallet_balance: number;
   virtual_account: VirtualAccount | null;
+  /** One per gateway, primary (`virtual_account`) first. */
+  virtual_accounts?: VirtualAccount[];
   vehicle: VehicleSummary | null;
   shift: boolean;
 }

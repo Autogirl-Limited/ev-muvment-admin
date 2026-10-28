@@ -19,6 +19,8 @@ import {
   type ApplicationStatus,
   type DriverApplication,
   type VirtualAccount,
+  PAYMENT_PROVIDER_LABELS,
+  driverAccounts,
 } from "@/lib/api/staff";
 import { queryKeys } from "@/lib/query/keys";
 import { useCurrentUser } from "@/lib/query/user";
@@ -119,7 +121,7 @@ function DvaCard({ account }: { account: VirtualAccount }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-sm font-semibold">{account.account_name}</p>
-          <p className="mt-1 text-xs text-muted">{account.provider} · {account.currency} · {account.status}</p>
+          <p className="mt-1 text-xs text-muted">{PAYMENT_PROVIDER_LABELS[account.provider] ?? account.provider} · {account.currency} · {account.status}</p>
         </div>
       </div>
       <div className="mt-4 grid gap-2">
@@ -598,7 +600,7 @@ export function DriverApplicationsPage() {
             )}
             {selected.status === "APPROVED" && selected.virtual_account && (
               <div className="space-y-3">
-                <DvaCard account={selected.virtual_account} />
+                {driverAccounts(selected).map((account) => <DvaCard key={account.id} account={account} />)}
               </div>
             )}
 
@@ -666,7 +668,7 @@ export function DriverApplicationsPage() {
         {approvedApp && (
           <div className="space-y-4">
             <p className="text-sm text-muted">The driver account is active. Offer credential resend if delivery failed silently.</p>
-            {approvedApp.virtual_account && <DvaCard account={approvedApp.virtual_account} />}
+            {driverAccounts(approvedApp).map((account) => <DvaCard key={account.id} account={account} />)}
             <div className="flex flex-wrap gap-2">
               {approvedApp.user_id && (
                 <>

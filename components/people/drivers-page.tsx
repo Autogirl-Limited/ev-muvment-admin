@@ -39,7 +39,7 @@ const SORTS: Record<Sort, { label: string; compare: (a: ManagedUser, b: ManagedU
 };
 
 function matches(driver: ManagedUser, term: string) {
-  const haystack = [fullName(driver), driver.username, driver.email, driver.phone_number, driver.vehicle?.name, driver.virtual_account?.account_number].filter(Boolean).join(" ").toLowerCase();
+  const haystack = [fullName(driver), driver.username, driver.email, driver.phone_number, driver.vehicle?.name, ...(driver.virtual_accounts ?? [driver.virtual_account]).map((account) => account?.account_number)].filter(Boolean).join(" ").toLowerCase();
   return term
     .toLowerCase()
     .split(/\s+/)

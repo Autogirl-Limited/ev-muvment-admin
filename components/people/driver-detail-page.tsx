@@ -22,7 +22,15 @@ import { ApiError } from "@/lib/api/browser";
 import { getVehicle } from "@/lib/api/configuration";
 import { listDailyChecklists, type ChecklistResponse } from "@/lib/api/daily-checklists";
 import { listChargeSessions, type ChargeSession } from "@/lib/api/charge-sessions";
-import { listDvaTransactions, resyncDriverDva, type DvaTransaction, type Paginated } from "@/lib/api/staff";
+import {
+  PAYMENT_PROVIDER_LABELS,
+  driverAccounts,
+  listDvaTransactions,
+  resyncDriverDva,
+  type DvaTransaction,
+  type Paginated,
+  type PaymentProvider,
+} from "@/lib/api/staff";
 import { listWalletAllocations, type AllocationStatus, type WalletAllocation } from "@/lib/api/wallet";
 import { LAGOS, formatDateTime, formatRelative, fullName, kwh, naira } from "@/lib/format";
 import { useUserGuards } from "@/lib/hooks/use-user-guards";
@@ -165,10 +173,10 @@ export function DriverDetailPage({ id }: { id: string }) {
   });
 
   const recreateBank = useMutation({
-    mutationFn: () => resyncDriverDva(id),
-    onSuccess: () => {
+    mutationFn: (provider?: PaymentProvider) => resyncDriverDva(id, provider),
+    onSuccess: (account) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
-      toast.success("Bank account created.");
+      toast.success(`${PAYMENT_PROVIDER_LABELS[account.provider] ?? "Bank"} account created.`);
     },
     onError: (error) => toast.error(error instanceof ApiError ? error.message : "Couldn't create the bank account. Try again."),
   });
@@ -208,6 +216,8 @@ export function DriverDetailPage({ id }: { id: string }) {
   const name = fullName(driver);
   const fullVehicle = vehicle.data;
   const account = driver.virtual_account;
+  const accounts = driverAccounts(driver);
+  const hasPaystack = accounts.some((item) => item.provider === "PAYSTACK");
   const canGrant = driver.vehicle !== null;
   const since30 = daysAgoLagos(29);
   const today = lagosToday();
@@ -311,20 +321,32 @@ export function DriverDetailPage({ id }: { id: string }) {
           {/* Bank account */}
           <Card title="Bank account" icon="bank" action={<CardLink href={`/dva-transactions?userId=${id}&dateFrom=&dateTo=`}>All transfers</CardLink>}>
             {account ? (
-              <div className="space-y-3 p-4 sm:p-5">
-                <p className="text-sm text-muted">{account.account_name}</p>
-                <div className="grid gap-2">
-                  {(account.banks.length ? account.banks : [{ bank_name: account.bank_name, bank_code: account.bank_code, account_number: account.account_number }]).map((bank) => (
-                    <div key={`${bank.bank_code}-${bank.account_number}`} className="flex items-center justify-between gap-3 rounded-lg bg-subtle/60 px-3 py-2">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium">{bank.bank_name}</p>
-                        <p className="font-mono text-sm text-muted">{bank.account_number}</p>
-                      </div>
-                      <CopyButton value={bank.account_number} label={`Copy ${bank.bank_name} account number`} />
+              <div className="space-y-4 p-4 sm:p-5">
+                {accounts.map((item) => (
+                  <div key={item.id} className="space-y-2">
+                    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                      <p className="text-sm text-muted">{item.account_name}</p>
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted">{PAYMENT_PROVIDER_LABELS[item.provider] ?? item.provider}</p>
                     </div>
-                  ))}
-                </div>
-                {account.status !== "ACTIVE" && <Alert tone="error">This bank account is inactive at the provider.</Alert>}
+                    <div className="grid gap-2">
+                      {(item.banks.length ? item.banks : [{ bank_name: item.bank_name, bank_code: item.bank_code, account_number: item.account_number }]).map((bank) => (
+                        <div key={`${bank.bank_code}-${bank.account_number}`} className="flex items-center justify-between gap-3 rounded-lg bg-subtle/60 px-3 py-2">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium">{bank.bank_name}</p>
+                            <p className="font-mono text-sm text-muted">{bank.account_number}</p>
+                          </div>
+                          <CopyButton value={bank.account_number} label={`Copy ${bank.bank_name} account number`} />
+                        </div>
+                      ))}
+                    </div>
+                    {item.status !== "ACTIVE" && <Alert tone="error">This bank account is inactive at the provider.</Alert>}
+                  </div>
+                ))}
+                {!hasPaystack && (
+                  <Button variant="secondary" onClick={() => recreateBank.mutate("PAYSTACK")} loading={recreateBank.isPending}>
+                    <Icon name="refresh" className="size-4" />Add Paystack (Wema Bank) account
+                  </Button>
+                )}
               </div>
             ) : (
               <div className="p-2">
