@@ -9,6 +9,7 @@ import { AccessDenied } from "@/components/dashboard/access-denied";
 import { EmptyState, Icon } from "@/components/dashboard/screen-kit";
 import { ActionMenu, type MenuAction } from "@/components/people/action-menu";
 import { ActiveBadge, Avatar, Card, CardLink, CopyButton, InfoRow, ShiftBadge } from "@/components/people/people-parts";
+import { DriverKycRow } from "@/components/people/driver-kyc";
 import { DeleteUserDialog, ResetCredentialsDialog, ToggleActiveDialog } from "@/components/people/user-actions";
 import { AssignVehicleDialog, UnassignVehicleDialog } from "@/components/people/vehicle-dialogs";
 import { FreeGrantDialog } from "@/components/wallet/ev-wallet-page";
@@ -357,6 +358,7 @@ export function DriverDetailPage({ id }: { id: string }) {
                 </EmptyState>
               </div>
             )}
+            <DriverKycRow userId={id} />
           </Card>
 
           {/* Recent transfers */}

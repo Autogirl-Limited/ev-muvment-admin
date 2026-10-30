@@ -209,6 +209,22 @@ export function listDriversPage(page: number, signal?: AbortSignal) {
   );
 }
 
+/** Whether a driver's BVN / NIN is on file. The numbers themselves are never returned. */
+export interface KycStatus {
+  has_bvn: boolean;
+  has_nin: boolean;
+  has_kyc: boolean;
+}
+
+export function getDriverKyc(userId: string, signal?: AbortSignal) {
+  return apiFetch<KycStatus>(`/users/${userId}/kyc`, { signal });
+}
+
+/** Adds or replaces a driver's BVN and/or NIN (11 digits each) on their behalf. */
+export function saveDriverKyc(userId: string, body: { bvn?: string; nin?: string }) {
+  return apiFetch<KycStatus>(`/users/${userId}/kyc`, { method: "PUT", body });
+}
+
 /** Which gateways drivers currently get a bank account with. PAYSTACK only while the API has it switched on. */
 export function listDvaProviders(signal?: AbortSignal) {
   return apiFetch<{ providers: PaymentProvider[] }>("/payments/dva-providers", { signal });

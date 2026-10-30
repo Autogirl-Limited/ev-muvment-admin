@@ -19,6 +19,8 @@ export const queryKeys = {
   myPasskeys: ["me", "passkeys"] as const,
   /** Which gateways drivers get a bank account with (`GET /payments/dva-providers`). */
   dvaProviders: ["payments", "dva-providers"] as const,
+  /** Whether a driver's BVN / NIN is on file (`GET /users/{id}/kyc`). Under `users`, so refreshing people refreshes it. */
+  driverKyc: (userId: string) => ["users", "kyc", userId] as const,
   /** Admin: which 2FA methods the platform offers (`GET /auth-settings/two-factor-methods`). */
   authMethodSettings: ["auth-settings", "two-factor-methods"] as const,
   dashboard: {

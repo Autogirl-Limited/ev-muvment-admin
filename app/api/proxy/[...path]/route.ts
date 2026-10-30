@@ -61,7 +61,7 @@ async function handle(request: NextRequest, ctx: RouteContext<"/api/proxy/[...pa
 
   const hasBody = request.method !== "GET" && request.method !== "DELETE";
   const upstream = await forwardToApi(`${path}${request.nextUrl.search}`, {
-    method: request.method as "GET" | "POST" | "PATCH" | "DELETE",
+    method: request.method as "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
     rawBody: hasBody ? (await request.text()) || undefined : undefined,
     token: token.accessToken,
   });
@@ -75,6 +75,7 @@ async function handle(request: NextRequest, ctx: RouteContext<"/api/proxy/[...pa
 export {
   handle as GET,
   handle as POST,
+  handle as PUT,
   handle as PATCH,
   handle as DELETE,
 };
