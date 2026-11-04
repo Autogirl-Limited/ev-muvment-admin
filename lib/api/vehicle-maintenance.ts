@@ -16,6 +16,7 @@ export interface MaintenanceReceipt {
   file_name: string;
   content_type: string;
   size_bytes: number;
+  preview_url: string;
   download_url: string;
 }
 
@@ -80,6 +81,10 @@ export function createMaintenanceRecord(vehicleId: string, input: MaintenanceRec
     method: "POST",
     body: input,
   });
+}
+
+export function getMaintenanceRecord(vehicleId: string, recordId: string) {
+  return apiFetch<MaintenanceRecord>(`/vehicles/${vehicleId}/maintenance-records/${recordId}`);
 }
 
 export function updateMaintenanceRecord(

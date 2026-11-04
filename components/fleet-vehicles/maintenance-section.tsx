@@ -15,12 +15,14 @@ import { ApiError } from "@/lib/api/browser";
 import type { Vehicle } from "@/lib/api/configuration";
 import {
   createMaintenanceRecord,
+  getMaintenanceRecord,
   listMaintenanceRecords,
   updateMaintenanceRecord,
   uploadMaintenanceReceipt,
   voidMaintenanceRecord,
   type MaintenanceRecord,
   type MaintenanceRecordInput,
+  type MaintenanceReceipt,
   type MaintenanceType,
 } from "@/lib/api/vehicle-maintenance";
 import { formatDate, naira } from "@/lib/format";
@@ -207,12 +209,16 @@ function RecordCard({
   isAdmin,
   onEdit,
   onVoid,
+  onPreview,
+  previewing,
 }: {
   record: MaintenanceRecord;
   canManage: boolean;
   isAdmin: boolean;
   onEdit: () => void;
   onVoid: () => void;
+  onPreview: () => void;
+  previewing: boolean;
 }) {
   return (
     <li className="rounded-xl border border-border p-4">
@@ -238,10 +244,13 @@ function RecordCard({
       </dl>
       {record.notes && <p className="mt-3 whitespace-pre-wrap rounded-lg bg-subtle/60 p-3 text-sm text-muted">{record.notes}</p>}
       {record.receipt && (
-        <a href={record.receipt.download_url} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-brand hover:underline">
-          <Icon name="download" className="size-4" />
-          {record.receipt.file_name}
-        </a>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Button variant="secondary" onClick={onPreview} loading={previewing}>
+            {!previewing && <Icon name="zoomIn" className="size-4" />}
+            Preview receipt
+          </Button>
+          <span className="min-w-0 truncate text-xs text-muted">{record.receipt.file_name}</span>
+        </div>
       )}
     </li>
   );
@@ -263,6 +272,8 @@ export function MaintenanceSection({
   const [voiding, setVoiding] = useState<MaintenanceRecord | null>(null);
   const [voidReason, setVoidReason] = useState("");
   const [voidError, setVoidError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<MaintenanceReceipt | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   const history = useQuery({
     queryKey: queryKeys.vehicleMaintenance.list(vehicle.id, page),
@@ -280,6 +291,19 @@ export function MaintenanceSection({
       setVoidReason("");
     },
     onError: (error) => setVoidError(errorMessage(error, "Could not void this record.")),
+  });
+
+  const loadPreview = useMutation({
+    mutationFn: (recordId: string) => getMaintenanceRecord(vehicle.id, recordId),
+    onSuccess: (record) => {
+      if (!record.receipt) {
+        setPreviewError("This receipt is no longer attached to the maintenance record.");
+        return;
+      }
+      setPreviewError(null);
+      setPreview(record.receipt);
+    },
+    onError: (error) => setPreviewError(errorMessage(error, "Could not load this receipt.")),
   });
 
   const items = history.data?.items ?? [];
@@ -313,6 +337,8 @@ export function MaintenanceSection({
                   isAdmin={isAdmin}
                   onEdit={() => setEditing(record)}
                   onVoid={() => { setVoiding(record); setVoidReason(""); setVoidError(null); }}
+                  onPreview={() => { setPreviewError(null); loadPreview.mutate(record.id); }}
+                  previewing={loadPreview.isPending && loadPreview.variables === record.id}
                 />
               ))}
             </ul>
@@ -341,6 +367,34 @@ export function MaintenanceSection({
             <Button variant="danger" disabled={voidReason.trim().length < 3} loading={voidRecord.isPending} onClick={() => voidRecord.mutate()}>Void record</Button>
           </ModalActions>
         </div>
+      </Modal>
+
+      <Modal open={preview !== null} onClose={() => setPreview(null)} title={preview?.file_name ?? "Receipt preview"} size="xl">
+        {preview && (
+          <div className="space-y-4">
+            {preview.content_type === "application/pdf" ? (
+              <iframe
+                src={preview.preview_url}
+                title={`Preview of ${preview.file_name}`}
+                className="h-[min(70dvh,48rem)] w-full rounded-lg border border-border bg-white"
+              />
+            ) : (
+              // The backend only accepts JPEG and PNG images here.
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={preview.preview_url} alt={`Receipt ${preview.file_name}`} className="mx-auto max-h-[70dvh] max-w-full rounded-lg object-contain" />
+            )}
+            <div className="flex justify-end">
+              <a href={preview.download_url} target="_blank" rel="noreferrer" className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-brand px-4 text-sm font-medium text-brand-foreground transition hover:brightness-95">
+                <Icon name="download" className="size-4" />
+                Download receipt
+              </a>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal open={previewError !== null} onClose={() => setPreviewError(null)} title="Receipt unavailable">
+        {previewError && <Alert tone="error">{previewError}</Alert>}
       </Modal>
     </section>
   );
