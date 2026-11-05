@@ -85,6 +85,10 @@ export const queryKeys = {
     /** Total for a filter, used for "used by N vehicles" hints. */
     count: (filters: unknown) => ["vehicles", "count", filters] as const,
   },
+  vehicleMaintenance: {
+    all: ["vehicle-maintenance"] as const,
+    list: (vehicleId: string, page: number) => ["vehicle-maintenance", "list", vehicleId, page] as const,
+  },
   vehicleTypes: {
     all: ["vehicle-types"] as const,
     list: (filters: unknown) => ["vehicle-types", "list", filters] as const,

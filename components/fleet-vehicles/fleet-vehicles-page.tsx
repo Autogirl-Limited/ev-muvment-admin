@@ -59,6 +59,7 @@ function hasCustomSchedule(vehicle: Vehicle) {
 export function FleetVehiclesPage() {
   const user = useCurrentUser();
   const isAdmin = user.user_type === "ADMIN";
+  const canManageMaintenance = isAdmin || user.user_type === "RELATIONSHIP_OFFICER";
   const isStaff = isAdmin || user.user_type === "ACCOUNT_OFFICER" || user.user_type === "RELATIONSHIP_OFFICER";
   const url = useUrlState();
   const search = useSearchState(url, "q");
@@ -295,6 +296,7 @@ export function FleetVehiclesPage() {
         <VehicleDetails
           id={dialog.id}
           isAdmin={isAdmin}
+          canManageMaintenance={canManageMaintenance}
           onClose={close}
           onEdit={(vehicle) => setDialog({ kind: "form", vehicle })}
           onAssign={(vehicle) => setDialog({ kind: "assign", vehicle })}

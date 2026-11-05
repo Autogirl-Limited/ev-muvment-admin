@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { EmptyState, Icon } from "@/components/dashboard/screen-kit";
+import { MaintenanceSection } from "@/components/fleet-vehicles/maintenance-section";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -91,6 +92,7 @@ function formatLocation(location: ChecklistLocation | ChecklistLocationOverride 
 interface DetailsProps {
   id: string | null;
   isAdmin: boolean;
+  canManageMaintenance: boolean;
   onClose: () => void;
   onEdit: (vehicle: Vehicle) => void;
   onAssign: (vehicle: Vehicle) => void;
@@ -569,7 +571,7 @@ function ScheduleOverridesSection({ vehicle, isAdmin }: { vehicle: Vehicle; isAd
   );
 }
 
-export function VehicleDetails({ id, isAdmin, onClose, onEdit, onAssign, onUnassign, onReassign, onDelete }: DetailsProps) {
+export function VehicleDetails({ id, isAdmin, canManageMaintenance, onClose, onEdit, onAssign, onUnassign, onReassign, onDelete }: DetailsProps) {
   const [editingSchedule, setEditingSchedule] = useState(false);
   const query = useQuery({
     queryKey: queryKeys.vehicles.detail(id ?? ""),
@@ -670,6 +672,8 @@ export function VehicleDetails({ id, isAdmin, onClose, onEdit, onAssign, onUnass
           </div>
 
           <ScheduleOverridesSection vehicle={vehicle} isAdmin={isAdmin} />
+
+          <MaintenanceSection vehicle={vehicle} canManage={canManageMaintenance} isAdmin={isAdmin} />
 
           <div className="flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:flex-wrap sm:justify-end">
             <Button variant="ghost" onClick={() => onDelete(vehicle)} className="text-danger hover:bg-danger-soft hover:text-danger">Delete</Button>
