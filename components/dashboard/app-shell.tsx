@@ -62,6 +62,13 @@ const ICONS: Record<NavIcon, ReactNode> = {
       <circle cx="16.5" cy="13" r=".6" />
     </>
   ),
+  tracking: (
+    <>
+      <path d="M12 21s7-6.2 7-11.5a7 7 0 0 0-14 0C5 14.8 12 21 12 21Z" />
+      <circle cx="12" cy="9.5" r="2.5" />
+      <path d="M3 4h3M18 4h3" />
+    </>
+  ),
   configurations: (
     <>
       <path d="M4 7h9M17 7h3M4 17h3M11 17h9" />

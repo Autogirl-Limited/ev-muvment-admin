@@ -14,6 +14,7 @@ export type NavIcon =
   | "drivers"
   | "staff"
   | "fleet"
+  | "tracking"
   | "configurations"
   | "pickupRequests"
   | "dropOffMonitor";
@@ -69,6 +70,12 @@ export const NAVIGATION: NavSection[] = [
         label: "Fleet vehicles",
         href: "/fleet-vehicles",
         icon: "fleet",
+        roles: ["ADMIN", "ACCOUNT_OFFICER", "RELATIONSHIP_OFFICER"],
+      },
+      {
+        label: "Live tracking",
+        href: "/vehicle-tracking",
+        icon: "tracking",
         roles: ["ADMIN", "ACCOUNT_OFFICER", "RELATIONSHIP_OFFICER"],
       },
       {
