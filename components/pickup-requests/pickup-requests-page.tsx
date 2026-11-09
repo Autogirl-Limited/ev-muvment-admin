@@ -8,6 +8,7 @@ import { ConfigPageHeader, EmptyState, ErrorState, SkeletonRows } from "@/compon
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Field } from "@/components/ui/field";
 import { Modal, ModalActions } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
@@ -157,11 +158,19 @@ export function PickupRequestsPage() {
   const isStaff = isAdmin || user.user_type === "ACCOUNT_OFFICER" || user.user_type === "RELATIONSHIP_OFFICER";
   const url = useUrlState();
   const tab = (url.get("status") || "PENDING") as PickupRequestStatus | "ALL";
+  const dateFrom = url.get("dateFrom");
+  const dateTo = url.get("dateTo");
 
   const [approving, setApproving] = useState<PickupRequest | null>(null);
   const [rejecting, setRejecting] = useState<PickupRequest | null>(null);
 
-  const filters = { page: url.page, page_size: LIST_PAGE_SIZE, status: tab === "ALL" ? undefined : tab };
+  const filters = {
+    page: url.page,
+    page_size: LIST_PAGE_SIZE,
+    status: tab === "ALL" ? undefined : tab,
+    dateFrom: dateFrom || undefined,
+    dateTo: dateTo || undefined,
+  };
   const requests = useQuery({
     queryKey: queryKeys.pickupRequests.list(filters),
     queryFn: ({ signal }) => listPickupRequests(filters, signal),
@@ -183,19 +192,29 @@ export function PickupRequestsPage() {
       />
 
       <section className="overflow-hidden rounded-2xl border border-border bg-surface shadow-card">
-        <div className="flex gap-2 overflow-x-auto border-b border-border p-3">
-          {STATUS_TABS.map((item) => (
-            <button
-              key={item.value}
-              type="button"
-              onClick={() => url.set({ status: item.value === "PENDING" ? undefined : item.value })}
-              className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition ${
-                tab === item.value ? "bg-brand text-brand-foreground" : "bg-subtle text-muted hover:bg-subtle/70 hover:text-foreground"
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
+        <div className="flex flex-col gap-3 border-b border-border p-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex gap-2 overflow-x-auto">
+            {STATUS_TABS.map((item) => (
+              <button
+                key={item.value}
+                type="button"
+                onClick={() => url.set({ status: item.value === "PENDING" ? undefined : item.value })}
+                className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition ${
+                  tab === item.value ? "bg-brand text-brand-foreground" : "bg-subtle text-muted hover:bg-subtle/70 hover:text-foreground"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+          <DateRangePicker
+            compact
+            align="end"
+            className="w-full sm:w-56"
+            from={dateFrom}
+            to={dateTo}
+            onApply={({ from, to }) => url.set({ dateFrom: from, dateTo: to })}
+          />
         </div>
 
         {requests.isLoading ? (

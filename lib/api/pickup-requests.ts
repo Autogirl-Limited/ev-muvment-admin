@@ -39,6 +39,8 @@ export interface ListPickupRequestsParams {
   status?: PickupRequestStatus;
   vehicleId?: string;
   driverId?: string;
+  dateFrom?: string;
+  dateTo?: string;
 }
 
 export interface ApprovePickupRequestInput {

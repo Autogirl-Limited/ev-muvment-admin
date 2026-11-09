@@ -162,6 +162,8 @@ export interface Vehicle {
   assigned_at: string | null;
   assigned_by: string | null;
   checklist_overrides: ChecklistOverrides;
+  tracker_device_id: number | null;
+  tracker_imei: string | null;
 }
 
 export interface CreateVehicleRequest {
